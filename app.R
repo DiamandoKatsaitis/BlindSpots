@@ -845,15 +845,7 @@ ui <- shinydashboard::dashboardPage(
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "Case study"),
                 h2(class = "bs-card-title", "The Station Square exception"),
-                div(class = "bs-callout warm",
-                    span(class = "amber-dot"),
-                    tags$strong("A road can be critical to a city without anyone wanting to go there."),
-                    " Five neighbourhoods act as the busiest \u201cbridges\u201d in Amsterdam's travel-time network ",
-                    "\u2014 remove any one and the rest of the city gets measurably harder to reach from itself. ",
-                    "Betweenness centrality identifies all five. But being a bridge and being an individually ",
-                    tags$em("accessible"), " place \u2014 somewhere a long-run random walker actually ends up ",
-                    "\u2014 turn out to be almost entirely unrelated (Spearman \u03c1 = 0.039 across all 445 ",
-                    "modelled units). Almost."),
+                uiOutput("station_intro_callout"),
                 br(),
                 div(style = "display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap;",
                     tags$span(style = "font-size:0.82rem; color:var(--bs-faint);", "Viewing:"),
@@ -1230,6 +1222,24 @@ server <- function(input, output, session) {
   })
   
   # ------------------------------------------------------- Station Square
+  # Was a static sentence hardcoding "Spearman rho = 0.039 across all 445
+  # modelled units" -- 0.039 is actually the No-residential-roads value (444
+  # units), paired with 445, the Full-network unit count. Now reads both the
+  # correlation and the unit count from whichever scenario is selected, so
+  # the two numbers always come from the same report.
+  output$station_intro_callout <- renderUI({
+    r <- real_row()
+    div(class = "bs-callout warm",
+        span(class = "amber-dot"),
+        tags$strong("A road can be critical to a city without anyone wanting to go there."),
+        " Five neighbourhoods act as the busiest “bridges” in Amsterdam's travel-time network ",
+        "— remove any one and the rest of the city gets measurably harder to reach from itself. ",
+        "Betweenness centrality identifies all five. But being a bridge and being an individually ",
+        tags$em("accessible"), " place — somewhere a long-run random walker actually ends up ",
+        "— turn out to be almost entirely unrelated (Spearman ρ = ", r$betweenness_accessibility_cor,
+        " across all ", r$n_modelled_units, " modelled units). Almost.")
+  })
+  
   bridge_data <- reactive(real_bridges %>% filter(scenario == real_scenario()) %>% arrange(desc(betweenness)))
   
   output$bridge_plot <- renderPlotly({
@@ -1338,9 +1348,22 @@ server <- function(input, output, session) {
   
   output$coverage_table <- renderDT({
     e <- filtered_edges()
+    # NOTE: `observed` here is a logical column (one row per road segment).
+    # The previous version wrote `observed = sum(observed), pct_observed =
+    # round(100 * mean(observed), 1)` inside the same summarise() call --
+    # dplyr evaluates a summarise()'s expressions in order and makes each
+    # newly-created column available to the ones after it, so by the time
+    # pct_observed was computed, "observed" no longer referred to the
+    # original per-row logical column but to the just-created single-number
+    # count (sum(observed)). mean() of that single number is just itself, so
+    # pct_observed silently became sum(observed) * 100 (e.g. 6 observed segments
+    # -> "600") instead of the actual percentage. Naming the count column
+    # something else avoids the shadowing.
     tbl <- e %>% group_by(network_source) %>%
-      summarise(segments = n(), observed = sum(observed),
-                pct_observed = round(100 * mean(observed), 1), .groups = "drop") %>%
+      summarise(segments = n(),
+                n_observed = sum(observed),
+                pct_observed = round(100 * n_observed / segments, 1),
+                .groups = "drop") %>%
       arrange(desc(segments))
     datatable(tbl, options = list(dom = "t", pageLength = 5), rownames = FALSE,
               colnames = c("Network source", "Segments", "Observed", "% observed"))

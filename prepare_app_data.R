@@ -109,7 +109,8 @@ wr_data   <- read_scenario(dir_wr, "No residential roads")
 # ---------------------------------------------------------------------------
 real_scale <- bind_rows(full_data$scale, wr_data$scale) %>%
   select(scenario, segments, length_km, pct_30kmh, sig_components,
-         largest_share_pct, admin_units_baseline, eigen_power_gap, pagerank_cor)
+         largest_share_pct, admin_units_baseline, eigen_power_gap, pagerank_cor,
+         n_modelled_units, betweenness_accessibility_cor)
 
 real_topten <- bind_rows(full_data$topten, wr_data$topten)
 
