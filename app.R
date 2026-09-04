@@ -1143,16 +1143,18 @@ server <- function(input, output, session) {
   
   output$real_topten_plot <- renderPlotly({
     df <- real_topten %>% filter(scenario == real_scenario()) %>% arrange(rank)
-    p <- ggplot(df, aes(x = stationary_prob, y = reorder(unit, stationary_prob),
-                        text = paste0(unit, ": ", signif(stationary_prob, 3)))) +
-      geom_col(fill = col_signal) +
-      labs(x = "Stationary probability", y = NULL) +
-      theme_minimal(base_size = 12) +
-      theme(panel.background = element_rect(fill = col_bg, color = NA),
-            plot.background  = element_rect(fill = col_bg, color = NA),
-            panel.grid = element_line(color = "#262a31"),
-            axis.text = element_text(color = col_text_mute),
-            axis.title = element_text(color = col_text))
+    p <- suppressWarnings(
+      ggplot(df, aes(x = stationary_prob, y = reorder(unit, stationary_prob),
+                     text = paste0(unit, ": ", signif(stationary_prob, 3)))) +
+        geom_col(fill = col_signal) +
+        labs(x = "Stationary probability", y = NULL) +
+        theme_minimal(base_size = 12) +
+        theme(panel.background = element_rect(fill = col_bg, color = NA),
+              plot.background  = element_rect(fill = col_bg, color = NA),
+              panel.grid = element_line(color = "#262a31"),
+              axis.text = element_text(color = col_text_mute),
+              axis.title = element_text(color = col_text))
+    )
     ggplotly(p, tooltip = "text") %>% plotly_dark(legend_top = FALSE)
   })
   
@@ -1243,20 +1245,22 @@ server <- function(input, output, session) {
       df %>% transmute(unit, value = accessibility_norm, raw = stationary_prob, bar_color,
                        metric = "Accessibility \u2014 how popular a destination")
     )
-    p <- ggplot(long_df, aes(x = value, y = reorder(unit, value), fill = bar_color,
-                             text = paste0(unit, ": ", signif(raw, 3)))) +
-      geom_col() +
-      scale_fill_identity() +
-      facet_wrap(~ metric, ncol = 1, scales = "free_y") +
-      labs(x = NULL, y = NULL) +
-      theme_minimal(base_size = 12) +
-      theme(panel.background = element_rect(fill = col_bg, color = NA),
-            plot.background  = element_rect(fill = col_bg, color = NA),
-            panel.grid = element_line(color = "#262a31"),
-            strip.text = element_text(color = col_text, face = "bold", hjust = 0),
-            strip.background = element_rect(fill = col_bg, color = NA),
-            axis.text = element_text(color = col_text_mute),
-            axis.title = element_text(color = col_text))
+    p <- suppressWarnings(
+      ggplot(long_df, aes(x = value, y = reorder(unit, value), fill = bar_color,
+                          text = paste0(unit, ": ", signif(raw, 3)))) +
+        geom_col() +
+        scale_fill_identity() +
+        facet_wrap(~ metric, ncol = 1, scales = "free_y") +
+        labs(x = NULL, y = NULL) +
+        theme_minimal(base_size = 12) +
+        theme(panel.background = element_rect(fill = col_bg, color = NA),
+              plot.background  = element_rect(fill = col_bg, color = NA),
+              panel.grid = element_line(color = "#262a31"),
+              strip.text = element_text(color = col_text, face = "bold", hjust = 0),
+              strip.background = element_rect(fill = col_bg, color = NA),
+              axis.text = element_text(color = col_text_mute),
+              axis.title = element_text(color = col_text))
+    )
     ggplotly(p, tooltip = "text") %>% plotly_dark(legend_top = FALSE)
   })
   
@@ -1316,17 +1320,19 @@ server <- function(input, output, session) {
   # ---------------------------------------------------------- Coverage demo
   output$coverage_map <- renderPlotly({
     e <- filtered_edges()
-    p <- ggplot(e) +
-      geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2, color = observed,
-                       text = paste0(road_class, " \u00b7 ", network_source, "<br>",
-                                     round(length_m), " m \u00b7 ", speed_kmh, " km/h")),
-                   linewidth = 0.9) +
-      scale_color_manual(values = c(`TRUE` = col_signal, `FALSE` = col_void),
-                         labels = c(`TRUE` = "Observed", `FALSE` = "Blind spot")) +
-      coord_equal() + theme_void(base_size = 13) +
-      theme(legend.position = "none",
-            plot.background  = element_rect(fill = col_bg, color = NA),
-            panel.background = element_rect(fill = col_bg, color = NA))
+    p <- suppressWarnings(
+      ggplot(e) +
+        geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2, color = observed,
+                         text = paste0(road_class, " \u00b7 ", network_source, "<br>",
+                                       round(length_m), " m \u00b7 ", speed_kmh, " km/h")),
+                     linewidth = 0.9) +
+        scale_color_manual(values = c(`TRUE` = col_signal, `FALSE` = col_void),
+                           labels = c(`TRUE` = "Observed", `FALSE` = "Blind spot")) +
+        coord_equal() + theme_void(base_size = 13) +
+        theme(legend.position = "none",
+              plot.background  = element_rect(fill = col_bg, color = NA),
+              panel.background = element_rect(fill = col_bg, color = NA))
+    )
     ggplotly(p, tooltip = "text") %>% plotly_dark(legend_top = FALSE)
   })
   
@@ -1353,15 +1359,17 @@ server <- function(input, output, session) {
       rowSums(matrix(dnorm(mid_dist_mat[, obs_idx], sd = h), ncol = length(obs_idx)))
     e$kde_value <- kde_val
     
-    p <- ggplot(e) +
-      geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2, color = kde_value,
-                       text = paste0(road_class, "<br>KDE = ", round(kde_value, 4))),
-                   linewidth = 1) +
-      scale_color_gradientn(colours = grad_pal, name = "Density") +
-      coord_equal() + theme_void(base_size = 13) +
-      theme(plot.background  = element_rect(fill = col_bg, color = NA),
-            panel.background = element_rect(fill = col_bg, color = NA),
-            legend.text  = element_text(color = col_text))
+    p <- suppressWarnings(
+      ggplot(e) +
+        geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2, color = kde_value,
+                         text = paste0(road_class, "<br>KDE = ", round(kde_value, 4))),
+                     linewidth = 1) +
+        scale_color_gradientn(colours = grad_pal, name = "Density") +
+        coord_equal() + theme_void(base_size = 13) +
+        theme(plot.background  = element_rect(fill = col_bg, color = NA),
+              panel.background = element_rect(fill = col_bg, color = NA),
+              legend.text  = element_text(color = col_text))
+    )
     p <- ggplotly(p, tooltip = "text") %>% plotly_dark(legend_top = FALSE)
     
     # ggplotly's colorbar for a continuous scale on geom_segment doesn't
@@ -1446,8 +1454,8 @@ server <- function(input, output, session) {
   
   observeEvent(input$anomaly_reset, removed_edges_rv(integer(0)))
   
-  observeEvent(plotly::event_data("plotly_click", source = "anomaly_map"), {
-    click <- plotly::event_data("plotly_click", source = "anomaly_map")
+  observeEvent(suppressWarnings(plotly::event_data("plotly_click", source = "anomaly_map")), {
+    click <- suppressWarnings(plotly::event_data("plotly_click", source = "anomaly_map"))
     req(click, click$customdata)
     eid <- as.integer(click$customdata[1])
     current <- removed_edges_rv()
@@ -1538,16 +1546,18 @@ server <- function(input, output, session) {
              col = ifelse(is_removed, col_removed, "#2a2e35"),
              lw  = ifelse(is_removed, 2.4, 0.5))
     
-    p <- ggplot() +
-      geom_segment(data = e, aes(x = x1, y = y1, xend = x2, yend = y2, color = col, linewidth = lw)) +
-      geom_point(data = nd, aes(x = x, y = y, color = col, size = size, text = tip)) +
-      scale_color_identity() +
-      scale_linewidth_identity() +
-      scale_size_identity() +
-      coord_equal() + theme_void(base_size = 13) +
-      theme(legend.position = "none",
-            plot.background  = element_rect(fill = col_bg, color = NA),
-            panel.background = element_rect(fill = col_bg, color = NA))
+    p <- suppressWarnings(
+      ggplot() +
+        geom_segment(data = e, aes(x = x1, y = y1, xend = x2, yend = y2, color = col, linewidth = lw)) +
+        geom_point(data = nd, aes(x = x, y = y, color = col, size = size, text = tip)) +
+        scale_color_identity() +
+        scale_linewidth_identity() +
+        scale_size_identity() +
+        coord_equal() + theme_void(base_size = 13) +
+        theme(legend.position = "none",
+              plot.background  = element_rect(fill = col_bg, color = NA),
+              panel.background = element_rect(fill = col_bg, color = NA))
+    )
     ggplotly(p, tooltip = "text") %>% plotly_dark(legend_top = FALSE)
   }
   
