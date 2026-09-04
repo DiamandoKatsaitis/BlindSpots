@@ -9,9 +9,10 @@ suppressWarnings(suppressPackageStartupMessages({
   library(scales)
 }))
 set.seed(2026)
+#rsconnect::writeManifest()
 
 # ---------------------------------------------------------------------------
-# THEME TOKENS
+# THEME TOKENS (R-side, used inside ggplot/plotly; CSS variables mirror these)
 # ---------------------------------------------------------------------------
 col_bg        <- "#14161a"
 col_panel     <- "#1c1f24"
@@ -22,6 +23,12 @@ col_amber     <- "#f5b34e"
 col_text      <- "#f4f1ea"
 col_text_mute <- "#9aa3ad"
 grad_pal      <- c(col_panel, col_canal, "#6ee7b7", col_signal)
+
+# Diverging colorscale for correlation heatmaps specifically: grad_pal is a
+# sequential green ramp (fine for density/accessibility, which are never
+# negative), but a Spearman correlation matrix has a real, meaningful zero
+# point and negative values -- a sequential ramp can't show that distinction.
+# Coral/red for negative, dark neutral at zero, signal green for +1.
 col_negative   <- "#e0575c"
 diverging_pal  <- list(
   list(0,    col_negative),
@@ -42,107 +49,37 @@ plotly_dark <- function(p, legend_top = TRUE) {
 
 # ---------------------------------------------------------------------------
 # REAL THESIS RESULTS — Amsterdam network (not synthetic)
+#    Hardcoded from the actual printed tables/messages in the two rendered
+#    companion reports. "Full network" = all motorised classes; "No
+#    residential roads" = residential/unclassified/living_street excluded.
 # ---------------------------------------------------------------------------
-real_scale <- tibble(
-  scenario             = c("Full network", "No residential roads"),
-  segments             = c(21605L, 8470L),
-  length_km            = c(2082, 778),
-  pct_30kmh            = c(85.2, 64.9),
-  sig_components       = c(31L, 3L),
-  largest_share_pct    = c(40.3, 74.4),
-  admin_units_baseline = c(509L, 463L),
-  eigen_power_gap      = c(0.05916, 0.00044),
-  pagerank_cor         = c(0.244, 0.728)
-)
+# ---------------------------------------------------------------------------
+# REAL THESIS RESULTS — Amsterdam network (not synthetic)
+#    Loaded from app_data.rds, which is built by prepare_app_data.R from the
+#    CSVs the two rendered companion reports themselves write out (see the
+#    "app_*" export chunks near the end of Part H/J in each .Rmd) -- nothing
+#    in this section is hand-typed. Re-run prepare_app_data.R and redeploy
+#    any time the underlying analysis changes.
+# ---------------------------------------------------------------------------
+app_data <- readRDS("app_data.rds")
 
-real_topten <- bind_rows(
-  tibble(
-    scenario = "Full network", rank = 1:10,
-    unit = c("Muidenbuurt-West", "Drieburg", "Pampusbuurt-West", "Pampusbuurt-Oost",
-             "Planciusbuurt-Noord", "Aalsmeerwegbuurt-West", "Science Park-Noord",
-             "Noorderstrook-Oost", "Alexanderplein e.o.", "Mercatorpark"),
-    stationary_prob = c(0.0777, 0.0418, 0.0390, 0.0387, 0.0246, 0.0122,
-                        0.0100, 0.00989, 0.00977, 0.00972)
-  ),
-  tibble(
-    scenario = "No residential roads", rank = 1:10,
-    unit = c("Jan Maijenbuurt", "Weesperzijde-Midden/Zuid", "Orteliusbuurt-Noord",
-             "Timorpleinbuurt-Zuid", "Orteliusbuurt-Zuid", "Balboaplein e.o.",
-             "Orteliusbuurt-Midden", "Marine-Etablissement", "Kattenburg",
-             "Nieuwendammerdijk-Oost"),
-    stationary_prob = c(0.0294, 0.0272, 0.0268, 0.0203, 0.0200, 0.0199,
-                        0.0198, 0.0179, 0.0179, 0.0166)
-  )
-)
-
-real_corr_matrix <- list(
-  "Full network" = matrix(c(
-    1.00, -0.02,  0.92, -0.06,
-    -0.02,  1.00, -0.01,  0.24,
-    0.92, -0.01,  1.00, -0.02,
-    -0.06,  0.24, -0.02,  1.00
-  ), nrow = 4, byrow = TRUE,
-  dimnames = list(c("P_time", "P_speed", "P_observed", "Baseline"),
-                  c("P_time", "P_speed", "P_observed", "Baseline"))),
-  "No residential roads" = matrix(c(
-    1.00, -0.03,  0.95, -0.15,
-    -0.03,  1.00, -0.04,  0.40,
-    0.95, -0.04,  1.00, -0.14,
-    -0.15,  0.40, -0.14,  1.00
-  ), nrow = 4, byrow = TRUE,
-  dimnames = list(c("P_time", "P_speed", "P_observed", "Baseline"),
-                  c("P_time", "P_speed", "P_observed", "Baseline")))
-)
-
-real_kfun <- bind_rows(
-  tibble(
-    scenario = "Full network",
-    component = c(5, 6, 10, 11, 18, 21, 26, 38, 40, 42, 44, 50, 55, 66, 78),
-    n_sensors = c(62, 30, 52, 58, 46, 21, 10, 12, 15, 33, 38, 24, 28, 19, 29),
-    max_r     = c(4695, 1649, 3598, 4858, 4081, 123, 2580, 516, 2142, 3948, 1530, 2648, 1552, 1383, 705),
-    classification = c("Within envelope", "Clustered", "Within envelope", "Within envelope",
-                       "Within envelope", "Within envelope", "Within envelope", "Within envelope",
-                       "Within envelope", "Within envelope", "Regular/Dispersed", "Within envelope",
-                       "Within envelope", "Clustered", "Within envelope"),
-    reliability = c("N/A", "Stable", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
-                    "N/A", "N/A", "N/A", "N/A", "N/A", "Stable", "N/A")
-  ),
-  tibble(
-    scenario = "No residential roads",
-    component = c(6, 7, 14, 15, 17, 20, 24, 36, 39, 41, 43, 45, 47, 52, 68),
-    n_sensors = c(68, 27, 54, 58, 12, 46, 19, 15, 35, 34, 38, 17, 25, 28, 30),
-    max_r     = c(4695, 1649, 3598, 4858, 278, 4081, 123, 557, 3660, 3948, 1530, 1542, 2648, 1552, 705),
-    classification = c("Within envelope", "Within envelope", "Within envelope", "Clustered",
-                       "Regular/Dispersed", "Within envelope", "Regular/Dispersed", "Within envelope",
-                       "Within envelope", "Within envelope", "Regular/Dispersed", "Regular/Dispersed",
-                       "Within envelope", "Within envelope", "Within envelope"),
-    reliability = c("N/A", "N/A", "N/A", "Stable", "N/A", "N/A", "N/A", "N/A",
-                    "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A")
-  )
-)
-
-real_bridges <- bind_rows(
-  tibble(
-    scenario = "Full network",
-    unit = c("Stationsplein e.o.", "Van der Kunbuurt", "IJselbuurt-West",
-             "Houthavens-Oost", "Petroleumhaven"),
-    betweenness = c(42022, 31747, 29512, 31446, 30288),
-    stationary_prob = c(0.00848, 0.00149, 0.00147, 0.00100, 0.000443)
-  ),
-  tibble(
-    scenario = "No residential roads",
-    unit = c("Leidsebuurt-Noordwest", "Marnixbuurt-Zuid", "Da Costabuurt-Zuid",
-             "Sporenburg", "Weesperzijde-Noord"),
-    betweenness = c(32290, 33077, 37833, 30044, 29848),
-    stationary_prob = c(0.00294, 0.00263, 0.00222, 0.00124, 0.00117)
-  )
-) %>%
-  mutate(network_avg = ifelse(scenario == "Full network", 1 / 445, 1 / 444),
-         is_exception = unit == "Stationsplein e.o.")
+real_scale       <- app_data$real_scale
+real_topten      <- app_data$real_topten
+real_corr_matrix <- app_data$real_corr_matrix
+real_kfun        <- app_data$real_kfun
+real_bridges     <- app_data$real_bridges
 
 # ---------------------------------------------------------------------------
-# MODEL IMPACT OF RESIDENTIAL-ROAD REMOVAL
+# MODEL IMPACT OF RESIDENTIAL-ROAD REMOVAL — explicit side-by-side proportion
+# and difference table, shown regardless of the scenario toggle above (the
+# whole point of this table is to compare both at once, not one at a time).
+# Every value here is pulled directly from real_scale/real_corr_matrix above
+# (themselves loaded from the reports' own output) -- nothing here is a
+# second, separately-typed copy of those numbers.
 # ---------------------------------------------------------------------------
+get_scale <- function(col, scenario) real_scale[[col]][real_scale$scenario == scenario]
+get_cor   <- function(row, scenario) real_corr_matrix[[scenario]][row, "Baseline"]
+
 real_model_diagnostics <- tibble(
   metric = c(
     "Eigen \u2194 power-iteration stationary-probability gap (largest component, top unit)",
@@ -152,8 +89,22 @@ real_model_diagnostics <- tibble(
     "P_observed \u2194 Part F baseline correlation (Spearman \u03c1)",
     "Admin units with a computable Part F baseline score"
   ),
-  full = c(0.05916, 0.244, -0.06, 0.24, -0.02, 509),
-  wr   = c(0.00044, 0.728, -0.15, 0.40, -0.14, 463),
+  full = c(
+    get_scale("eigen_power_gap", "Full network"),
+    get_scale("pagerank_cor", "Full network"),
+    get_cor("P_time", "Full network"),
+    get_cor("P_speed", "Full network"),
+    get_cor("P_observed", "Full network"),
+    get_scale("admin_units_baseline", "Full network")
+  ),
+  wr = c(
+    get_scale("eigen_power_gap", "No residential roads"),
+    get_scale("pagerank_cor", "No residential roads"),
+    get_cor("P_time", "No residential roads"),
+    get_cor("P_speed", "No residential roads"),
+    get_cor("P_observed", "No residential roads"),
+    get_scale("admin_units_baseline", "No residential roads")
+  ),
   is_correlation = c(FALSE, FALSE, TRUE, TRUE, TRUE, FALSE)
 ) %>%
   mutate(
@@ -175,7 +126,17 @@ real_topten_overlap <- length(intersect(
 ))
 
 # ---------------------------------------------------------------------------
-# SMALL SYNTHETIC "CANAL-RING" NETWORK
+# SMALL SYNTHETIC "CANAL-RING" NETWORK — a teaching aid only, for the "See
+# The Methods" tab. Clearly not Amsterdam's real geometry; used only to make
+# the statistical machinery (coverage bias, KDE, K-function) tangible and
+# clickable. Never presented as a result in its own right.
+#
+# Deliberately irregular rather than a perfect ring/grid: row spacing, column
+# count, and column spacing are all randomised per row, plus a jitter on
+# every node and a handful of random gaps/shortcuts, so it reads as an
+# organic street layout rather than a geometric pattern. One continuous
+# "highway" spine (motorway class) runs the length of the grid and is the
+# natural thing to click closed in the Anomaly tab, though any segment can be.
 # ---------------------------------------------------------------------------
 n_rows_net <- 6
 
@@ -323,7 +284,11 @@ rm(D_ff, D_ft, D_tf, D_tt)
 total_length_m <- sum(edges_df$length_m)
 
 # ---------------------------------------------------------------------------
-# ANOMALY DEMO
+# ANOMALY DEMO — baseline vs. Markov accessibility, and sensor coverage, on
+# the same toy network with any segment(s) the person clicks on actually
+# REMOVED from the graph (not just slowed down). A teaching aid for the
+# "Anomaly" tab only, same caveat as the rest of the synthetic network: not
+# Amsterdam, illustrative only.
 # ---------------------------------------------------------------------------
 compute_models <- function(e, remove_edge_ids = integer(0)) {
   e2 <- e %>% filter(!(edge_id %in% remove_edge_ids))

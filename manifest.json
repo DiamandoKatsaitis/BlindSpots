@@ -2266,8 +2266,14 @@
     }
   },
   "files": {
+    ".RData": {
+      "checksum": "6be382519f2936c8527572ac20e50032"
+    },
     "app.R": {
-      "checksum": "b36c7d261172aec0537f8514a36c4907"
+      "checksum": "749a10103c4c504daac21473fa1a74b5"
+    },
+    "prepare_app_data.R": {
+      "checksum": "c077b2994e35b1698571892065267504"
     }
   },
   "users": null
