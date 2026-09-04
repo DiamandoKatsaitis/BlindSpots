@@ -130,6 +130,7 @@ app_data <- list(
   real_bridges     = real_bridges
 )
 
+setwd("~/Uni/Honours/RA/Code/RShiny")
 saveRDS(app_data, "app_data.rds")
 
 message("Wrote app_data.rds with:")
@@ -139,3 +140,4 @@ message("  real_corr_matrix: ", length(real_corr_matrix), " matrices")
 message("  real_kfun:        ", nrow(real_kfun), " rows")
 message("  real_bridges:     ", nrow(real_bridges), " rows")
 message("Copy app_data.rds into the same folder as app.R, commit both, and redeploy.")
+
