@@ -425,10 +425,13 @@ ui <- shinydashboard::dashboardPage(
         .pulse-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
                      background: var(--bs-accent); margin-right:6px; animation: pulseglow 2.2s infinite; }
         .blindspot-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
-                          border:1.5px dashed var(--bs-void); margin-right:6px; }
+                          background: var(--bs-void); border:1.5px dashed #8b97a3; margin-right:6px; }
         .amber-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
                      background: var(--bs-warm); margin-right:6px; animation: pulseglow-amber 2.2s infinite; }
+        .removed-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+                        background: #e0575c; margin-right:6px; animation: pulseglow-red 2.2s infinite; }
         @keyframes pulseglow { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.55);} 70%{box-shadow:0 0 0 9px rgba(52,211,153,0);} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0);} }
+        @keyframes pulseglow-red { 0%{box-shadow:0 0 0 0 rgba(224,87,92,.55);} 70%{box-shadow:0 0 0 9px rgba(224,87,92,0);} 100%{box-shadow:0 0 0 0 rgba(224,87,92,0);} }
         @keyframes pulseglow-amber { 0%{box-shadow:0 0 0 0 rgba(245,179,78,.55);} 70%{box-shadow:0 0 0 9px rgba(245,179,78,0);} 100%{box-shadow:0 0 0 0 rgba(245,179,78,0);} }
 
         /* ---- card system ---- */
@@ -457,18 +460,35 @@ ui <- shinydashboard::dashboardPage(
                                 font-weight: 500; margin-bottom: 7px; color: var(--bs-ink); }
         .bs-hero-side p { font-size: 12px; color: var(--bs-soft); line-height: 1.65; margin: 0; }
 
-        /* ---- roadmap stepper (Overview: how to read this app) ---- */
-        .bs-stepper { position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 6px 30px 2px; }
-        .bs-stepper::before { content: ''; position: absolute; top: 23px; left: 46px; right: 46px; height: 2px;
-                               background: var(--bs-border); z-index: 0; }
-        .bs-step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center;
-                   text-align: center; flex: 1 1 0; min-width: 90px; }
+        /* ---- roadmap (Overview: how to read this app) ----
+           One merged component: used to be a numbered-circle stepper teaser
+           row followed by a separate row of four fuller Stop-N cards below
+           the KPIs, both describing the same four tabs. Now a single row of
+           four cards, each carrying the numbered circle, the icon+title, the
+           fuller description, and the CTA link. */
+        .bs-roadmap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+        .bs-roadmap-step {
+          display: flex; flex-direction: column; align-items: flex-start;
+          background: var(--bs-card); border: 1px solid var(--bs-border); border-radius: 8px;
+          padding: 18px; height: 100%;
+        }
         .bs-step-circle { width: 36px; height: 36px; border-radius: 50%; background: var(--bs-bg);
                            border: 2px solid var(--bs-accent); color: var(--bs-accent);
                            display: flex; align-items: center; justify-content: center;
-                           font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; margin-bottom: 9px; }
-        .bs-step-label { font-size: 12px; font-weight: 600; color: var(--bs-ink); }
-        .bs-step-sub { font-size: 10.5px; color: var(--bs-faint); margin-top: 3px; max-width: 150px; line-height: 1.4; }
+                           font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; margin-bottom: 12px; }
+        .bs-roadmap-step .bs-card-title { font-size: 17px; margin-bottom: 6px; }
+        .bs-roadmap-step .bs-card-subtitle { flex: 1 1 auto; margin-bottom: 14px; }
+        .bs-roadmap-step .cta-link { margin-top: auto; }
+
+        /* Icon badges (Overview roadmap + methodology tiles) -- Font Awesome
+           glyphs in a tinted circle, cycling through the same four accent
+           colours the KPI tiles already use, instead of plain emoji. */
+        .bs-icon-badge { width: 36px; height: 36px; border-radius: 50%; margin-bottom: 10px;
+                          display: flex; align-items: center; justify-content: center;
+                          font-size: 14px; background: rgba(52,211,153,0.13); color: var(--bs-accent); }
+        .bs-icon-badge.teal { background: rgba(47,184,166,0.14); color: var(--bs-teal); }
+        .bs-icon-badge.void { background: rgba(91,107,124,0.20); color: var(--bs-void); }
+        .bs-icon-badge.warm { background: rgba(245,179,78,0.14); color: var(--bs-warm); }
 
         /* ---- KPI cards ---- */
         .bs-kpis { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -540,7 +560,7 @@ ui <- shinydashboard::dashboardPage(
 
         /* Responsive */
         @media (max-width: 900px) {
-          .bs-hero, .bs-grid-2, .bs-grid-3, .bs-grid-4 { grid-template-columns: 1fr; }
+          .bs-hero, .bs-grid-2, .bs-grid-3, .bs-grid-4, .bs-roadmap { grid-template-columns: 1fr; }
           .bs-title { font-size: 38px; }
         }
         @media (max-width: 640px) {
@@ -548,11 +568,7 @@ ui <- shinydashboard::dashboardPage(
           .bs-header-top { flex-direction: column; gap: 4px; }
           .bs-title { font-size: 34px; }
           .bs-nav-link { padding: 8px 10px; }
-          .bs-stepper { flex-direction: column; align-items: flex-start; gap: 18px; padding-left: 6px; }
-          .bs-stepper::before { display: none; }
-          .bs-step { flex-direction: row; text-align: left; gap: 12px; max-width: none; }
-          .bs-step-circle { margin-bottom: 0; flex-shrink: 0; }
-          .bs-step-sub { max-width: none; }
+          .bs-roadmap { grid-template-columns: 1fr; }
         }
       ")),
       
@@ -642,28 +658,6 @@ ui <- shinydashboard::dashboardPage(
                 )
             ),
             
-            div(class = "bs-card",
-                p(class = "bs-section-kicker", "How to read this app"),
-                div(class = "bs-stepper",
-                    div(class = "bs-step",
-                        div(class = "bs-step-circle", "1"),
-                        div(class = "bs-step-label", "Real Findings"),
-                        div(class = "bs-step-sub", "The headline numbers")),
-                    div(class = "bs-step",
-                        div(class = "bs-step-circle", "2"),
-                        div(class = "bs-step-label", "Station Square"),
-                        div(class = "bs-step-sub", "One concrete exception")),
-                    div(class = "bs-step",
-                        div(class = "bs-step-circle", "3"),
-                        div(class = "bs-step-label", "See The Methods"),
-                        div(class = "bs-step-sub", "How the statistics work")),
-                    div(class = "bs-step",
-                        div(class = "bs-step-circle", "4"),
-                        div(class = "bs-step-label", "Anomaly"),
-                        div(class = "bs-step-sub", "Break something on purpose"))
-                )
-            ),
-            
             div(class = "bs-kpis",
                 div(class = "bs-kpi",
                     div(class = "bs-kpi-label", "Sensors observed"),
@@ -687,47 +681,92 @@ ui <- shinydashboard::dashboardPage(
                 )
             ),
             
-            div(class = "bs-grid-4",
-                div(class = "bs-card",
-                    p(class = "bs-section-kicker", "Stop 1"),
-                    h2(class = "bs-card-title", "\U0001F4CA Real Findings"),
-                    p(class = "bs-card-subtitle",
-                      "Network scale, the accessibility ranking, and what happens when residential roads are ",
-                      "stripped from the analysis. Flip the switch and watch a 130\u00d7 numerical-stability gap ",
-                      "disappear."),
-                    actionLink("goto_real", "See the real numbers \u2192", class = "cta-link")
-                ),
-                div(class = "bs-card",
-                    p(class = "bs-section-kicker", "Stop 2"),
-                    h2(class = "bs-card-title", "\U0001F68F Station Square"),
-                    p(class = "bs-card-subtitle",
-                      "Five road segments hold the city's travel-time network together. Four are pure ",
-                      "shortcuts. One is secretly also one of the most individually accessible places in ",
-                      "Amsterdam \u2014 and it's not a coincidence why."),
-                    actionLink("goto_station", "Meet the exception \u2192", class = "cta-link")
-                ),
-                div(class = "bs-card",
-                    p(class = "bs-section-kicker", "Stop 3"),
-                    h2(class = "bs-card-title", "\U0001F52C See The Methods"),
-                    p(class = "bs-card-subtitle",
-                      "How a network K-function, KDE, or Markov chain actually works \u2014 a small interactive ",
-                      "playground, clearly not Amsterdam's real geometry, to build intuition for the machinery."),
-                    actionLink("goto_methods", "Play with the demo \u2192", class = "cta-link")
-                ),
-                div(class = "bs-card",
-                    p(class = "bs-section-kicker", "Stop 4"),
-                    h2(class = "bs-card-title", "\u26A0\uFE0F Anomaly"),
-                    p(class = "bs-card-subtitle",
-                      "Click a road segment closed on the same toy network and watch the topology-free ",
-                      "baseline miss what the Markov chain catches immediately."),
-                    actionLink("goto_anomaly", "Break something \u2192", class = "cta-link")
+            # Was two separate, redundant sections describing the same four
+            # tabs -- a short numbered-circle "stepper" teaser here, and a
+            # fuller row of "Stop N" cards further down the page. Merged into
+            # one roadmap: each card keeps the numbered circle plus the
+            # fuller description and CTA link. `.bs-roadmap-step` is a column
+            # flexbox with the subtitle set to flex-grow and the link's
+            # margin-top set to auto, so all four CTA links line up on the
+            # same baseline regardless of how many lines each description
+            # wraps to.
+            div(class = "bs-card",
+                p(class = "bs-section-kicker", "How to read this app"),
+                div(class = "bs-roadmap",
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-step-circle", "1"),
+                        h2(class = "bs-card-title", "Real Findings"),
+                        p(class = "bs-card-subtitle",
+                          "Network scale, the accessibility ranking, and what happens when residential roads are ",
+                          "stripped from the analysis. Flip the switch and watch a 130\u00d7 numerical-stability gap ",
+                          "disappear."),
+                        actionLink("goto_real", "See the real numbers \u2192", class = "cta-link")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-step-circle", "2"),
+                        h2(class = "bs-card-title", "Station Square"),
+                        p(class = "bs-card-subtitle",
+                          "Five road segments hold the city's travel-time network together. Four are pure ",
+                          "shortcuts. One is secretly also one of the most individually accessible places in ",
+                          "Amsterdam \u2014 and it's not a coincidence why."),
+                        actionLink("goto_station", "Meet the exception \u2192", class = "cta-link")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-step-circle", "3"),
+                        h2(class = "bs-card-title", "See The Methods"),
+                        p(class = "bs-card-subtitle",
+                          "How a network K-function, KDE, or Markov chain actually works \u2014 a small interactive ",
+                          "playground, clearly not Amsterdam's real geometry, to build intuition for the machinery."),
+                        actionLink("goto_methods", "Play with the demo \u2192", class = "cta-link")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-step-circle", "4"),
+                        h2(class = "bs-card-title", "Anomaly"),
+                        p(class = "bs-card-subtitle",
+                          "Click a road segment closed on the same toy network and watch the topology-free ",
+                          "baseline miss what the Markov chain catches immediately."),
+                        actionLink("goto_anomaly", "Break something \u2192", class = "cta-link")
+                    )
                 )
             ),
             
             div(class = "bs-card",
-                p(class = "bs-section-kicker", "Acknowledgements"),
-                p(style = "color:var(--bs-faint); font-size:12px; margin:0;",
-                  em("With thanks to Renate Thiede, Inger Fabris-Rotelli \u2014 and, my cat." ))
+                p(class = "bs-section-kicker", "Methodology at a glance"),
+                h2(class = "bs-card-title", "What's actually running under the hood"),
+                p(class = "bs-card-subtitle",
+                  "Four techniques, each doing one specific job. See The Methods lets you play with all four ",
+                  "on a small toy network before trusting what they say about the real one."),
+                div(class = "bs-roadmap",
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-icon-badge", icon("magnifying-glass")),
+                        h2(class = "bs-card-title", "Availability audit"),
+                        p(class = "bs-card-subtitle",
+                          "Every one of the 693 monitoring locations checked for real sensor data and split by ",
+                          "road authority \u2014 Rijkswaterstaat's national highways versus Gemeente Amsterdam's ",
+                          "city network.")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-icon-badge teal", icon("diagram-project")),
+                        h2(class = "bs-card-title", "Network KDE"),
+                        p(class = "bs-card-subtitle",
+                          "Density estimated along the road network itself, not in open space \u2014 so a busy ",
+                          "street can't make an unconnected block next door look monitored.")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-icon-badge void", icon("chart-line")),
+                        h2(class = "bs-card-title", "K-function + CSR envelope"),
+                        p(class = "bs-card-subtitle",
+                          "Each disconnected sensor cluster tested against complete spatial randomness with a ",
+                          "Monte Carlo envelope, then stress-tested by removing sensors one at a time.")
+                    ),
+                    div(class = "bs-roadmap-step",
+                        div(class = "bs-icon-badge warm", icon("arrows-rotate")),
+                        h2(class = "bs-card-title", "Markov accessibility"),
+                        p(class = "bs-card-subtitle",
+                          "A homogeneous Markov chain over network travel times, cross-checked two independent ",
+                          "ways and against a topology-free baseline.")
+                    )
+                )
             )
           ),
           
@@ -1025,10 +1064,13 @@ ui <- shinydashboard::dashboardPage(
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "Network state \u2014 click a segment to toggle it"),
                 h2(class = "bs-card-title", "The closure, marked in red"),
+                p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-bottom:10px;",
+                  span(class = "pulse-dot"), "Observed   ",
+                  span(class = "blindspot-dot"), "Blind spot   ",
+                  span(class = "removed-dot"), "Removed"),
                 p(class = "bs-card-subtitle",
-                  "Green = observed, grey = blind spot, red = removed entirely. Everything below uses this ",
-                  "same colour key. A click won't be allowed if it would cut a block off from the rest of the ",
-                  "network completely."),
+                  "Everything below uses this same colour key. A click won't be allowed if it would cut a ",
+                  "block off from the rest of the network completely."),
                 plotlyOutput("anomaly_network_map", height = "440px")
             ),
             
@@ -1057,10 +1099,10 @@ ui <- shinydashboard::dashboardPage(
             ),
             
             div(class = "bs-callout warm",
-                tags$strong("Why this belongs next to Station Square: "),
-                "same lesson, opposite direction. Station Square shows a road segment that's more important ",
-                "than its traffic volume suggests; this shows what happens when a genuinely important segment ",
-                "disappears \u2014 and why a topology-free baseline can miss it entirely.")
+                tags$strong("The mirror image of Station Square: "),
+                "there, an ordinary-looking street turned out to matter far more than its traffic counts let on. ",
+                "Here, take away a segment everyone would guess matters \u2014 and watch the topology-free baseline ",
+                "barely notice, while the Markov chain feels it immediately.")
           )
         )
     )
@@ -1083,7 +1125,6 @@ server <- function(input, output, session) {
   observeEvent(input$goto_station, shinydashboard::updateTabItems(session, "tabs", selected = "station"))
   observeEvent(input$goto_methods, shinydashboard::updateTabItems(session, "tabs", selected = "methods"))
   observeEvent(input$goto_anomaly, shinydashboard::updateTabItems(session, "tabs", selected = "anomaly"))
-  
   # ---------------------------------------------------- Real Amsterdam data
   # A single shared scenario value, kept in sync across the two pill
   # selectors (Real Findings and Station Square) so flipping either one
