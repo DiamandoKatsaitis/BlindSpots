@@ -1242,7 +1242,7 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
                   span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
                   span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads · ",
-                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge · ")
+                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge ")
             ),
 
             div(class = "bs-callout",
