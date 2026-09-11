@@ -1127,7 +1127,7 @@ ui <- shinydashboard::dashboardPage(
                 leafletOutput("real_road_map", height = "540px"),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
                   span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
-                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads · ",
+                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads (auto-hides on “No residential roads”) · ",
                   span(style = paste0("color:", col_sensor_on, "; font-weight:600;"), "●"), " Observed sensor · ",
                   span(style = paste0("color:", col_sensor_off, "; font-weight:600;"), "●"), " Unobserved sensor")
             ),
@@ -1238,7 +1238,12 @@ ui <- shinydashboard::dashboardPage(
                   "above hides the residential layer here too, or untick it yourself any time in the layer ",
                   "picker. Tick \u201cNeighbourhood accessibility\u201d in the layer picker to see the ",
                   "stationary-probability shading."),
-                leafletOutput("station_road_map", height = "480px")
+                leafletOutput("station_road_map", height = "480px"),
+                p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
+                  span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
+                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads (auto-hides on “No residential roads”) · ",
+                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge (dual role) · ",
+                  span(style = paste0("color:", col_canal, "; font-weight:600;"), "●"), " Other bridge units (pure shortcuts)")
             ),
 
             div(class = "bs-callout",
