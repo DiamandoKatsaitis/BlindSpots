@@ -2774,16 +2774,19 @@
       "checksum": "1458af7e05f0708a0a8e6b17b21e9ce8"
     },
     "app.R": {
-      "checksum": "e47fdf065618a410e7fbf2158c102282"
+      "checksum": "1e13cc48c699b753ebf92d7044930dca"
+    },
+    "app_admin_choropleth_change.json": {
+      "checksum": "464eb887dae7e01351818a0057fa0983"
     },
     "app_admin_choropleth_full.json": {
-      "checksum": "3b2977c1d29542e53c26f576300e6156"
+      "checksum": "63fe064eefb7a636582c52827a77440d"
     },
     "app_admin_choropleth_wr.json": {
-      "checksum": "1259fd6602e669b845ce130bc7a40a16"
+      "checksum": "4a017a2943457c7c31bc86b0b8639197"
     },
     "app_admin_units.geojson": {
-      "checksum": "6171824486897378aaf531bd180fca25"
+      "checksum": "0cfa5ab3e324794c33cb56b322e51fd3"
     },
     "app_data.rds": {
       "checksum": "d6209fbc038676f6290f8b013d438601"
@@ -2801,7 +2804,7 @@
       "checksum": "d3714fc6bed059e7a45e6f5dc2387f03"
     },
     "export_map_data.R": {
-      "checksum": "0dffa917c409d0fe57ef6fe23b021823"
+      "checksum": "11ab33b87bff11184155061087191430"
     },
     "prepare_app_data.R": {
       "checksum": "bf9d2e768e68e9ca698f9867b388d8f2"

@@ -55,13 +55,18 @@ col_sensor_off    <- col_negative # sensor: unobserved -- reuses the app's exist
 col_station_outline <- col_amber # Stationsplein e.o. outline -- amber, the same colour already used
                                   # for "the exception" everywhere else (the KPI dot, the bridge-unit
                                   # markers), so the map reinforces the same visual language
-
+col_accessibility <- "#5b8cff"    # neighbourhood accessibility choropleth (high end) -- a distinct blue.
+                                  # This used to be col_signal, the exact same green as the
+                                  # non-residential roads layer, so a highly-accessible neighbourhood
+                                  # and an arterial road painted the same colour on top of each other --
+                                  # indistinguishable at a glance. Blue isn't used anywhere else on
+                                  # either map (green/pink/cyan/red/amber are all already spoken for),
+                                  # so the choropleth now reads as its own layer.
 # Sequential choropleth ramp for neighbourhood accessibility -- a plain light
-# grey (low) through to the app's own signature green (high), interpolated
-# into 4 quantile bands below. Deliberately just the two-colour family
-# already used throughout the rest of the app rather than a busier
+# grey (low) through to a distinct blue (high), interpolated into 4 quantile
+# bands below. Deliberately just a two-colour ramp rather than a busier
 # multi-hue scale.
-map_choropleth_colors <- c("#e3e6ea", col_signal)  # light grey -> the app's signature green
+map_choropleth_colors <- c("#e3e6ea", col_accessibility)  # light grey -> distinct blue
 
 plotly_dark <- function(p, legend_top = TRUE) {
   p %>% layout(
@@ -148,6 +153,7 @@ admin_centroids <- do.call(rbind, lapply(admin_geojson$features, function(f) {
     lat                    = p$centroid_lat %||% NA_real_,
     stationary_prob_full   = p$stationary_prob_full %||% NA_real_,
     stationary_prob_wr     = p$stationary_prob_wr %||% NA_real_,
+    component              = p$component %||% NA_integer_,
     is_station_square      = isTRUE(p$is_station_square),
     stringsAsFactors = FALSE
   )
@@ -169,26 +175,42 @@ sensor_points <- do.call(rbind, lapply(sensors_geojson$features, function(f) {
   )
 }))
 
-# admin_pal/admin_values are kept (cheap -- only 517 numbers, not geometry)
+# admin_pal_c1/admin_pal_c2 are kept (cheap -- only 517 numbers, not geometry)
 # purely to drive addLegend()'s swatch; the actual per-feature fill colours
-# now come from the precomputed admin_choropleth_json files above, not from
-# calling admin_pal() again at render time.
+# now come from the precomputed admin_choropleth_json files above (built by
+# build_choropleth_cache.R), not from calling either pal again at render time.
 #
 # Stationary probability is heavily right-skewed (a handful of very
-# accessible units, ~445 modelled units total averaging ~1/445 each) -- a
-# *linear* colour scale (col_numeric) crushes almost every neighbourhood
-# into the same near-invisible shade near the low end. col_quantile bins by
-# rank instead of raw value, so the map always has visible contrast no
-# matter how skewed the underlying numbers are. Kept deliberately coarse
-# (4 bands, not 7+) -- enough to read "low / mid / high / exceptional"
-# across 517 small polygons without turning the map into visual noise.
-admin_values <- c(admin_centroids$stationary_prob_full, admin_centroids$stationary_prob_wr)
-admin_values <- admin_values[!is.na(admin_values)]
-admin_pal <- scales::col_quantile(
+# accessible units) -- a *linear* colour scale (col_numeric) crushes almost
+# every neighbourhood into the same near-invisible shade near the low end.
+# col_quantile bins by rank instead of raw value, so the map always has
+# visible contrast no matter how skewed the underlying numbers are. Kept
+# deliberately coarse (4 bands, not 7+) -- enough to read "low / mid / high
+# / exceptional" without turning the map into visual noise.
+#
+# TWO separate palettes, not one: the road network splits into two
+# disconnected components, so the Markov chain (and its stationary
+# distribution) is run separately for each -- component 1, the main
+# network (445 units), and component 2, a smaller landmass disconnected
+# from it (70 units, south-east Amsterdam). Each chain's probabilities sum
+# to 1 within that chain alone, so component 2's raw values run
+# systematically higher purely because it has far fewer nodes sharing that
+# same probability mass -- not because those units are more accessible in
+# any way that's numerically comparable to component 1. Building each
+# component's quantile palette from its own values (but the same colour
+# ramp and bin count) lets both show up combined on one choropleth -- a
+# colour always means "this unit's relative position within its own
+# component" -- without implying the underlying numbers sit on one shared
+# scale. See build_choropleth_cache.R for the full explanation and the
+# per-feature tooltip that flags this for component-2 units.
+admin_values_c1 <- c(admin_centroids$stationary_prob_full[admin_centroids$component == 1],
+                      admin_centroids$stationary_prob_wr[admin_centroids$component == 1])
+admin_values_c1 <- admin_values_c1[!is.na(admin_values_c1)]
+admin_pal_c1 <- scales::col_quantile(
   map_choropleth_colors,
-  domain = admin_values,
+  domain = admin_values_c1,
   n = 4,
-  na.color = "#2a2e35"
+  na.color = col_negative
 )
 
 # ---------------------------------------------------------------------------
@@ -255,17 +277,39 @@ base_road_leaflet <- function(scenario) {
       label = ~paste0(network_source, ifelse(observed, " — observed", " — unobserved")),
       group = "Sensor coverage (693 real locations)"
     ) %>%
+    # Stationsplein e.o. (Amsterdam Centraal) marked directly on the road
+    # network itself, not only as the amber outline on its neighbourhood
+    # polygon in the "Neighbourhood accessibility" choropleth -- that layer
+    # is hidden by default, so until now the station square wasn't marked
+    # anywhere a visitor would actually see without opening the layer picker
+    # and switching it on. Off by default like the other extra overlays
+    # below (a presenter switches it on deliberately, e.g. when walking
+    # through Station Square specifically, rather than it always being on).
+    addCircleMarkers(
+      data = admin_centroids %>% filter(is_station_square), lng = ~lon, lat = ~lat,
+      radius = 9, stroke = TRUE, color = col_station_outline, weight = 3, opacity = 1,
+      fillColor = col_station_outline, fillOpacity = 0.25,
+      label = ~paste0(unit_name, " — Amsterdam Centraal station square"),
+      group = "Highlight: Station Square"
+    ) %>%
     addLayersControl(
       overlayGroups = c("Non-residential roads", "Residential roads", "Neighbourhood accessibility",
-                         "Sensor coverage (693 real locations)"),
+                         "Sensor coverage (693 real locations)", "Highlight: Station Square"),
       options = layersControlOptions(collapsed = FALSE)
     ) %>%
     hideGroup("Sensor coverage (693 real locations)") %>%
     hideGroup("Neighbourhood accessibility") %>%
+    hideGroup("Highlight: Station Square") %>%
     { if (show_residential) . else hideGroup(., "Residential roads") } %>%
+    # Swatch numbers reflect the main network's own scale (component 1) --
+    # component 2's smaller, separately-run chain is coloured on the same
+    # four-band ramp but its own scale (see admin_pal_c2 above), since one
+    # legend can't show two numeric domains at once. The per-unit tooltip
+    # flags this explicitly for every component-2 polygon.
     addLegend(
-      position = "bottomright", pal = admin_pal, values = admin_values,
-      title = "Stationary prob.", opacity = 0.95
+      position = "bottomright", pal = admin_pal_c1, values = admin_values_c1,
+      title = HTML("Neighbourhood accessibility<br>stationary prob."), opacity = 0.95,
+      className = "info legend legend-level"
     )
 }
 
@@ -809,6 +853,12 @@ ui <- shinydashboard::dashboardPage(
         .info.legend { background: var(--bs-card) !important; color: var(--bs-soft) !important;
                         border: 1px solid var(--bs-border) !important; border-radius: 6px !important;
                         padding: 8px 10px !important; font-size: 11px !important; line-height: 1.5 !important; }
+        /* The level legend exists in the DOM from first render (Leaflet
+           needs the addLegend() call regardless), but the layer itself is
+           off by default -- hidden here so there's no legend showing
+           before its layer checkbox is actually on; the script below
+           shows it exactly when that checkbox is ticked. */
+        .legend-level { display: none; }
 
         /* Responsive */
         @media (max-width: 900px) {
@@ -873,6 +923,30 @@ ui <- shinydashboard::dashboardPage(
               }
             }).observe(el);
           }
+          // The 'Neighbourhood accessibility' layer has its own
+          // addLegend() box, present in the DOM at all times but only
+          // relevant while that layer checkbox is actually on -- shown/
+          // hidden via Leaflet's own overlayadd/overlayremove events.
+          var LEVEL_GROUP = 'Neighbourhood accessibility';
+          function wireLegendToggle(id){
+            var map = getLeafletMap(id);
+            if (!map) { setTimeout(function(){ wireLegendToggle(id); }, 300); return; }
+            var container = document.getElementById(id);
+            function setVisible(cls, visible){
+              var el = container.querySelector('.' + cls);
+              // 'block', not '' -- the CSS above defaults this to
+              // display:none, so clearing the inline style would just
+              // fall back to that instead of actually showing it.
+              if (el) el.style.display = visible ? 'block' : 'none';
+            }
+            setVisible('legend-level', false);
+            map.on('overlayadd', function(e){
+              if (e.name === LEVEL_GROUP) setVisible('legend-level', true);
+            });
+            map.on('overlayremove', function(e){
+              if (e.name === LEVEL_GROUP) setVisible('legend-level', false);
+            });
+          }
           syncBsNav();
           $(document).on('shiny:inputchanged', function(event){
             if(event.name === 'tabs'){ syncBsNav(event.value); }
@@ -880,6 +954,8 @@ ui <- shinydashboard::dashboardPage(
           $(document).on('shown.bs.tab', function(){ setTimeout(syncBsNav, 10); });
           watchMapContainer('real_road_map');
           watchMapContainer('station_road_map');
+          wireLegendToggle('real_road_map');
+          wireLegendToggle('station_road_map');
           // Belt-and-braces fallback (essentially never needed in 2026, but
           // costs nothing to keep alongside the ResizeObserver above).
           $(document).on('shown.bs.tab', function(){ setTimeout(fixRealMapSizes, 300); });
@@ -1118,12 +1194,17 @@ ui <- shinydashboard::dashboardPage(
                   "Every line here is a real road segment from the same OSM extract the analysis runs on — ",
                   "21,605 of them. Flip the switch above to “No residential roads” and the residential layer ",
                   "hides itself here too — literally what that scenario removes — or untick it yourself any ",
-                  "time in the layer picker. Tick “Neighbourhood accessibility” in the layer picker (off by ",
-                  "default, so the roads read clearly first) to shade every unit by its Markov stationary ",
-                  "probability for whichever scenario is currently selected; click a neighbourhood for its ",
-                  "exact value. Tick “Sensor coverage” to overlay all 693 real monitoring locations, coloured ",
-                  "by whether each one actually has data — the coverage-bias story from the Overview tab, on ",
-                  "the real map."),
+                  "time in the layer picker. The choropleth layer is off by default, so the roads read clearly ",
+                  "first — tick “Neighbourhood accessibility” to shade every unit by its Markov ",
+                  "stationary probability for whichever scenario is currently selected, and click a ",
+                  "neighbourhood for its exact value. The road network itself splits into two disconnected ",
+                  "pieces — the main network and a ",
+                  "smaller landmass in the south-east — so the Markov chain is run separately on each; both ",
+                  "are shown combined here on the same colour scale, but a unit's colour reflects its ",
+                  "standing within its own component only, since the two chains' raw probabilities aren't ",
+                  "numerically comparable (the tooltip flags this for the smaller component's units). ",
+                  "Tick “Sensor coverage” to overlay all 693 real monitoring locations, coloured by whether ",
+                  "each one actually has data — the coverage-bias story from the Overview tab, on the real map."),
                 leafletOutput("real_road_map", height = "540px"),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
                   span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
@@ -1237,12 +1318,14 @@ ui <- shinydashboard::dashboardPage(
                   "that's the one to watch. Zoom out to see how central this chokepoint really is; the switch ",
                   "above hides the residential layer here too, or untick it yourself any time in the layer ",
                   "picker. Tick \u201cNeighbourhood accessibility\u201d in the layer picker to see the ",
-                  "stationary-probability shading."),
+                  "stationary-probability shading. The network's smaller, disconnected southern component is ",
+                  "shaded here using its own separately-run chain \u2014 see the Real Findings tab for why its ",
+                  "colours aren't numerically comparable to the main network's."),
                 leafletOutput("station_road_map", height = "480px"),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
                   span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
                   span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads · ",
-                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge ")
+                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge")
             ),
 
             div(class = "bs-callout",
