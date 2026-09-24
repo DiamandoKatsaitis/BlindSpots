@@ -1,3 +1,11 @@
+if (!grepl("UTF-8", Sys.getlocale("LC_CTYPE"), ignore.case = TRUE) &&
+    .Platform$OS.type == "unix") {
+  for (loc in c("C.UTF-8", "en_US.UTF-8")) {
+    if (grepl("UTF-8", Sys.getlocale("LC_CTYPE"), ignore.case = TRUE)) break
+    suppressWarnings(try(Sys.setlocale("LC_CTYPE", loc), silent = TRUE))
+  }
+}
+
 suppressWarnings(suppressPackageStartupMessages({
   library(shiny)
   library(shinydashboard)
@@ -14,6 +22,22 @@ set.seed(2026)
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 #rsconnect::writeManifest()
+
+# Small helpers so a variable like "P_time" or "t_ij" reads as proper math
+# (italic base, true subscript) everywhere it appears in prose, instead of
+# a literal underscore -- used for anything outside the MathJax $$...$$
+# equation blocks, which already render properly on their own. Two
+# versions: one returns Shiny UI tags (for p()/div() body text), the other
+# a raw HTML string (for contexts that can't take tag objects, like a DT
+# table cell rendered with escape = FALSE, or a Plotly axis tick label,
+# which Plotly's own text parser accepts a small pseudo-HTML subset for).
+math_sub_tag <- function(base, sub, italic_base = TRUE) {
+  tagList(if (italic_base) tags$em(base) else base, tags$sub(tags$em(sub)))
+}
+math_sub_html <- function(base, sub, italic_base = TRUE) {
+  b <- if (italic_base) paste0("<i>", base, "</i>") else base
+  paste0(b, "<sub><i>", sub, "</i></sub>")
+}
 
 # ---------------------------------------------------------------------------
 # THEME TOKENS (R-side, used inside ggplot/plotly; CSS variables mirror these)
@@ -53,15 +77,15 @@ col_road_local    <- "#f472b6"   # residential roads -- pink, clearly not grey/b
 col_sensor_on     <- "#22d3ee"   # sensor: observed -- cyan, unlike anything else on the map
 col_sensor_off    <- col_negative # sensor: unobserved -- reuses the app's existing "negative/missing" red
 col_station_outline <- col_amber # Stationsplein e.o. outline -- amber, the same colour already used
-                                  # for "the exception" everywhere else (the KPI dot, the bridge-unit
-                                  # markers), so the map reinforces the same visual language
+# for "the exception" everywhere else (the KPI dot, the bridge-unit
+# markers), so the map reinforces the same visual language
 col_accessibility <- "#5b8cff"    # neighbourhood accessibility choropleth (high end) -- a distinct blue.
-                                  # This used to be col_signal, the exact same green as the
-                                  # non-residential roads layer, so a highly-accessible neighbourhood
-                                  # and an arterial road painted the same colour on top of each other --
-                                  # indistinguishable at a glance. Blue isn't used anywhere else on
-                                  # either map (green/pink/cyan/red/amber are all already spoken for),
-                                  # so the choropleth now reads as its own layer.
+# This used to be col_signal, the exact same green as the
+# non-residential roads layer, so a highly-accessible neighbourhood
+# and an arterial road painted the same colour on top of each other --
+# indistinguishable at a glance. Blue isn't used anywhere else on
+# either map (green/pink/cyan/red/amber are all already spoken for),
+# so the choropleth now reads as its own layer.
 # Sequential choropleth ramp for neighbourhood accessibility -- a plain light
 # grey (low) through to a distinct blue (high), interpolated into 4 quantile
 # bands below. Deliberately just a two-colour ramp rather than a busier
@@ -71,10 +95,14 @@ map_choropleth_colors <- c("#e3e6ea", col_accessibility)  # light grey -> distin
 plotly_dark <- function(p, legend_top = TRUE) {
   p %>% layout(
     paper_bgcolor = col_bg, plot_bgcolor = col_bg,
-    font = list(color = col_text, family = "Space Grotesk"),
+    # Explicit size, not just color/family -- plotly.js's own default axis/
+    # tick/legend text is ~12px, which reads as a blur from the back of a
+    # room on a projector. 15px brings every plotly chart in the app up to
+    # the same big-screen-legible baseline as the surrounding page text.
+    font = list(color = col_text, family = "Space Grotesk", size = 15),
     xaxis = list(gridcolor = "#262a31", zerolinecolor = "#262a31"),
     yaxis = list(gridcolor = "#262a31", zerolinecolor = "#262a31"),
-    legend = if (legend_top) list(orientation = "h", y = 1.08, font = list(color = col_text)) else list(font = list(color = col_text)),
+    legend = if (legend_top) list(orientation = "h", y = 1.08, font = list(color = col_text, size = 15)) else list(font = list(color = col_text, size = 15)),
     margin = list(t = 30)
   ) %>% config(displaylogo = FALSE)
 }
@@ -83,7 +111,7 @@ plotly_dark <- function(p, legend_top = TRUE) {
 # REAL THESIS RESULTS — Amsterdam network (not synthetic)
 #    Hardcoded from the actual printed tables/messages in the two rendered
 #    companion reports. "Full network" = all motorised classes; "No
-#    residential roads" = residential/unclassified/living_street excluded.
+#    residential roads" = residential/unclassified/living street excluded.
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # REAL THESIS RESULTS — Amsterdam network (not synthetic)
@@ -100,6 +128,18 @@ real_topten      <- app_data$real_topten
 real_corr_matrix <- app_data$real_corr_matrix
 real_kfun        <- app_data$real_kfun
 real_bridges     <- app_data$real_bridges
+
+# Display-only relabelling for the two correlation heatmaps below -- the
+# matrix's own dimnames ("P_time" etc.) stay as-is since get_cor() above
+# indexes into them by that exact literal name; this is purely what's
+# shown on the plot axes, via Plotly's own small pseudo-HTML text parser
+# (it renders <sub>/<i> the same way it does in hover text or titles).
+real_corr_axis_labels <- c(
+  P_time     = math_sub_html("P", "time"),
+  P_speed    = math_sub_html("P", "speed"),
+  P_observed = math_sub_html("P", "observed"),
+  Baseline   = "Baseline"
+)
 
 # ---------------------------------------------------------------------------
 # REAL AMSTERDAM MAP LAYERS -- the actual road network (21,605 segments,
@@ -204,7 +244,7 @@ sensor_points <- do.call(rbind, lapply(sensors_geojson$features, function(f) {
 # scale. See build_choropleth_cache.R for the full explanation and the
 # per-feature tooltip that flags this for component-2 units.
 admin_values_c1 <- c(admin_centroids$stationary_prob_full[admin_centroids$component == 1],
-                      admin_centroids$stationary_prob_wr[admin_centroids$component == 1])
+                     admin_centroids$stationary_prob_wr[admin_centroids$component == 1])
 admin_values_c1 <- admin_values_c1[!is.na(admin_values_c1)]
 admin_pal_c1 <- scales::col_quantile(
   map_choropleth_colors,
@@ -238,9 +278,9 @@ basemap_tile_url <- if (nzchar(carto_api_key)) {
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
 }
 basemap_attribution <- if (nzchar(carto_api_key)) {
-  "© <a href='https://carto.com/attributions'>CARTO</a>, © OpenStreetMap contributors"
+  "\u00a9 <a href='https://carto.com/attributions'>CARTO</a>, \u00a9 OpenStreetMap contributors"
 } else {
-  "Tiles © Esri — Esri, DeLorme, NAVTEQ"
+  "Tiles \u00a9 Esri \u2014 Esri, DeLorme, NAVTEQ"
 }
 
 # A dark, real basemap consistent with the rest of the app's theme, with
@@ -258,7 +298,7 @@ basemap_attribution <- if (nzchar(carto_api_key)) {
 base_road_leaflet <- function(scenario) {
   show_residential <- scenario != "No residential roads"
   leaflet(options = leafletOptions(minZoom = 10, maxZoom = 18, zoomControl = TRUE,
-                                    preferCanvas = TRUE)) %>%
+                                   preferCanvas = TRUE)) %>%
     addTiles(
       urlTemplate = basemap_tile_url,
       attribution = basemap_attribution,
@@ -274,7 +314,7 @@ base_road_leaflet <- function(scenario) {
       data = sensor_points, lng = ~lon, lat = ~lat,
       radius = 3.6, stroke = TRUE, color = "#0e1013", weight = 0.6, fillOpacity = 0.95,
       fillColor = ~ifelse(observed, col_sensor_on, col_sensor_off),
-      label = ~paste0(network_source, ifelse(observed, " — observed", " — unobserved")),
+      label = ~paste0(network_source, ifelse(observed, " \u2014 observed", " \u2014 unobserved")),
       group = "Sensor coverage (693 real locations)"
     ) %>%
     # Stationsplein e.o. (Amsterdam Centraal) marked directly on the road
@@ -289,12 +329,12 @@ base_road_leaflet <- function(scenario) {
       data = admin_centroids %>% filter(is_station_square), lng = ~lon, lat = ~lat,
       radius = 9, stroke = TRUE, color = col_station_outline, weight = 3, opacity = 1,
       fillColor = col_station_outline, fillOpacity = 0.25,
-      label = ~paste0(unit_name, " — Amsterdam Centraal station square"),
+      label = ~paste0(unit_name, " \u2014 Amsterdam Centraal station square"),
       group = "Highlight: Station Square"
     ) %>%
     addLayersControl(
       overlayGroups = c("Non-residential roads", "Residential roads", "Neighbourhood accessibility",
-                         "Sensor coverage (693 real locations)", "Highlight: Station Square"),
+                        "Sensor coverage (693 real locations)", "Highlight: Station Square"),
       options = layersControlOptions(collapsed = FALSE)
     ) %>%
     hideGroup("Sensor coverage (693 real locations)") %>%
@@ -328,10 +368,10 @@ real_model_diagnostics <- tibble(
   metric = c(
     "Eigen \u2194 power-iteration stationary-probability gap (largest component, top unit)",
     "PageRank \u2194 stationary-distribution correlation (largest component)",
-    "P_time \u2194 Part F baseline correlation (Spearman \u03c1)",
-    "P_speed \u2194 Part F baseline correlation (Spearman \u03c1)",
-    "P_observed \u2194 Part F baseline correlation (Spearman \u03c1)",
-    "Admin units with a computable Part F baseline score"
+    paste0(math_sub_html("P", "time"), " \u2194 baseline correlation (Spearman \u03c1)"),
+    paste0(math_sub_html("P", "speed"), " \u2194 baseline correlation (Spearman \u03c1)"),
+    paste0(math_sub_html("P", "observed"), " \u2194 baseline correlation (Spearman \u03c1)"),
+    "Admin units with a computable baseline score"
   ),
   full = c(
     get_scale("eigen_power_gap", "Full network"),
@@ -621,10 +661,19 @@ ui <- shinydashboard::dashboardPage(
           --bs-void:   #5b6b7c;
         }
 
+        /* Root font-size, not just cosmetic: every rem value in this
+           stylesheet is relative to it, and it's also what any *unstyled*
+           standard Bootstrap control (radio/select/slider labels, button
+           text -- none of which get their own explicit font-size below)
+           actually inherits. Bootstrap 3's own default is 14px; bumped
+           here for a room of ~200 people reading off a projector, not a
+           laptop screen up close. */
+        html { font-size: 18px; }
         html, body, .content-wrapper, .right-side, .main-footer {
           background: var(--bs-bg) !important;
           font-family: 'Space Grotesk', sans-serif !important;
           color: var(--bs-ink) !important;
+          font-size: 1rem !important;
         }
         * { box-sizing: border-box; }
 
@@ -634,7 +683,13 @@ ui <- shinydashboard::dashboardPage(
         .main-footer { display: none !important; }
         .content { padding: 0 2px 28px !important; }
 
-        .bs-shell { max-width: 1240px; margin: 0 auto; padding: 28px 18px 8px; }
+        /* Was a fixed 1240px, which left wide, wasted black margins on
+           anything bigger than a small laptop -- including the projector
+           this gets presented on. Scales with the viewport instead (94% of
+           it) up to a cap that's still generous on very wide/4K displays,
+           rather than stopping at a small-laptop width regardless of how
+           much screen is actually available. */
+        .bs-shell { max-width: min(94vw, 1800px); margin: 0 auto; padding: 28px 18px 8px; }
 
         /* ---- header ---- */
         .bs-header { margin-bottom: 22px; border-bottom: 1px solid var(--bs-border); padding-bottom: 16px; }
@@ -642,14 +697,14 @@ ui <- shinydashboard::dashboardPage(
           display: flex; justify-content: space-between; gap: 16px; align-items: baseline;
           border-bottom: 1px solid var(--bs-border); padding-bottom: 8px; margin-bottom: 9px;
         }
-        .bs-eyebrow { font-size: 9px; letter-spacing: .19em; text-transform: uppercase; color: var(--bs-faint); }
+        .bs-eyebrow { font-size: 15px; letter-spacing: .19em; text-transform: uppercase; color: var(--bs-faint); }
         .bs-title {
-          font-family: 'Fraunces', Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1;
+          font-family: 'Fraunces', Georgia, serif; font-size: 67.5px; font-weight: 600; line-height: 1;
           letter-spacing: -.03em; margin: 8px 0 6px; color: var(--bs-ink);
           text-shadow: 0 0 22px rgba(52,211,153,0.18);
         }
         .bs-title span { color: var(--bs-accent); }
-        .bs-subtitle { margin: 0; color: var(--bs-faint); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+        .bs-subtitle { margin: 0; color: var(--bs-faint); font-size: 17px; letter-spacing: .12em; text-transform: uppercase; }
 
         /* ---- top navigation ---- */
         .bs-nav {
@@ -659,7 +714,7 @@ ui <- shinydashboard::dashboardPage(
         .bs-nav-link {
           display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 6px;
           color: var(--bs-faint) !important; background: transparent; text-decoration: none !important;
-          font-size: 11px; font-weight: 600; letter-spacing: .02em; transition: all .18s ease;
+          font-size: 17px; font-weight: 600; letter-spacing: .02em; transition: all .18s ease;
         }
         .bs-nav-link:hover { color: var(--bs-ink) !important; background: #23262c; }
         .bs-nav-link.active { color: var(--bs-bg) !important; background: var(--bs-accent);
@@ -709,10 +764,10 @@ ui <- shinydashboard::dashboardPage(
         .tab-pane.active > .bs-card:first-child,
         .bs-grid-2 > .bs-card, .bs-grid-3 > .bs-card, .bs-grid-4 > .bs-card,
         .bs-roadmap > .bs-card { margin-top: 0 !important; }
-        .bs-card-title { font-family: 'Fraunces', Georgia, serif; font-size: 20px; line-height: 1.15;
+        .bs-card-title { font-family: 'Fraunces', Georgia, serif; font-size: 30.5px; line-height: 1.15;
                           font-weight: 500; color: var(--bs-ink); margin: 0 0 4px; }
-        .bs-card-subtitle { font-size: 12px; line-height: 1.55; color: var(--bs-faint); margin: 0 0 16px; }
-        .bs-section-kicker { font-size: 9px; text-transform: uppercase; letter-spacing: .16em;
+        .bs-card-subtitle { font-size: 18px; line-height: 1.55; color: var(--bs-faint); margin: 0 0 16px; }
+        .bs-section-kicker { font-size: 15px; text-transform: uppercase; letter-spacing: .16em;
                               color: var(--bs-faint); margin: 0 0 7px; font-weight: 600; }
 
         /* ---- hero ---- */
@@ -720,13 +775,13 @@ ui <- shinydashboard::dashboardPage(
         .bs-hero-main { background: #0e3a2c; color: var(--bs-ink); border-radius: 8px; padding: 28px;
                         border: 1px solid var(--bs-border); }
         .bs-hero-main .bs-section-kicker { color: #9fe3c4; }
-        .bs-hero-main h2 { font-family: 'Fraunces', Georgia, serif; font-size: 31px; line-height: 1.08;
+        .bs-hero-main h2 { font-family: 'Fraunces', Georgia, serif; font-size: 46.5px; line-height: 1.08;
                             font-weight: 500; margin: 0 0 10px; letter-spacing: -.02em; }
-        .bs-hero-main p { color: #d7ddd8; max-width: 700px; font-size: 13px; line-height: 1.75; margin: 0; }
+        .bs-hero-main p { color: #d7ddd8; max-width: 700px; font-size: 19.5px; line-height: 1.75; margin: 0; }
         .bs-hero-side { background: var(--bs-card); border: 1px solid var(--bs-border); border-radius: 8px; padding: 22px; }
-        .bs-hero-side strong { display: block; font-family: 'Fraunces', Georgia, serif; font-size: 18px;
+        .bs-hero-side strong { display: block; font-family: 'Fraunces', Georgia, serif; font-size: 27px;
                                 font-weight: 500; margin-bottom: 7px; color: var(--bs-ink); }
-        .bs-hero-side p { font-size: 12px; color: var(--bs-soft); line-height: 1.65; margin: 0; }
+        .bs-hero-side p { font-size: 18px; color: var(--bs-soft); line-height: 1.65; margin: 0; }
 
         /* ---- roadmap (Overview: how to read this app) ----
            One merged component: used to be a numbered-circle stepper teaser
@@ -743,8 +798,8 @@ ui <- shinydashboard::dashboardPage(
         .bs-step-circle { width: 36px; height: 36px; border-radius: 50%; background: var(--bs-bg);
                            border: 2px solid var(--bs-accent); color: var(--bs-accent);
                            display: flex; align-items: center; justify-content: center;
-                           font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; margin-bottom: 12px; }
-        .bs-roadmap-step .bs-card-title { font-size: 17px; margin-bottom: 6px; }
+                           font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 21px; margin-bottom: 12px; }
+        .bs-roadmap-step .bs-card-title { font-size: 25.5px; margin-bottom: 6px; }
         .bs-roadmap-step .bs-card-subtitle { flex: 1 1 auto; margin-bottom: 14px; }
         .bs-roadmap-step .cta-link { margin-top: auto; }
 
@@ -753,7 +808,7 @@ ui <- shinydashboard::dashboardPage(
            colours the KPI tiles already use, instead of plain emoji. */
         .bs-icon-badge { width: 36px; height: 36px; border-radius: 50%; margin-bottom: 10px;
                           display: flex; align-items: center; justify-content: center;
-                          font-size: 14px; background: rgba(52,211,153,0.13); color: var(--bs-accent); }
+                          font-size: 21px; background: rgba(52,211,153,0.13); color: var(--bs-accent); }
         .bs-icon-badge.teal { background: rgba(47,184,166,0.14); color: var(--bs-teal); }
         .bs-icon-badge.void { background: rgba(91,107,124,0.20); color: var(--bs-void); }
         .bs-icon-badge.warm { background: rgba(245,179,78,0.14); color: var(--bs-warm); }
@@ -765,10 +820,10 @@ ui <- shinydashboard::dashboardPage(
         .bs-kpi.teal { border-top-color: var(--bs-teal); }
         .bs-kpi.warm { border-top-color: var(--bs-warm); }
         .bs-kpi.void { border-top-color: var(--bs-void); }
-        .bs-kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: var(--bs-faint); margin-bottom: 4px; }
-        .bs-kpi-value { font-family: 'IBM Plex Mono', monospace; font-size: 23px; font-weight: 600;
+        .bs-kpi-label { font-size: 15px; text-transform: uppercase; letter-spacing: .14em; color: var(--bs-faint); margin-bottom: 4px; }
+        .bs-kpi-value { font-family: 'IBM Plex Mono', monospace; font-size: 35px; font-weight: 600;
                          letter-spacing: -.01em; color: var(--bs-ink); line-height: 1.1; }
-        .bs-kpi-sub { font-size: 11px; color: var(--bs-faint); margin-top: 4px; }
+        .bs-kpi-sub { font-size: 17px; color: var(--bs-faint); margin-top: 4px; }
 
         /* ---- grids ---- */
         /* margin-top matters here: a standalone .bs-card is followed by one
@@ -785,7 +840,7 @@ ui <- shinydashboard::dashboardPage(
 
         /* ---- callouts ---- */
         .bs-callout { padding: 13px 16px; border-left: 4px solid var(--bs-accent); background: rgba(52,211,153,.07);
-                       border-radius: 0 7px 7px 0; color: var(--bs-soft); font-size: 12px; line-height: 1.65; margin-top: 14px; }
+                       border-radius: 0 7px 7px 0; color: var(--bs-soft); font-size: 18px; line-height: 1.65; margin-top: 14px; }
         .bs-callout.warm { border-left-color: var(--bs-warm); background: rgba(245,179,78,.08); }
         .bs-callout.teal { border-left-color: var(--bs-teal); background: rgba(47,184,166,.08); }
         .bs-callout.void { border-left-color: var(--bs-void); background: rgba(91,107,124,.12); }
@@ -797,7 +852,7 @@ ui <- shinydashboard::dashboardPage(
                                           border-radius:8px; border:1px solid var(--bs-border); flex-wrap:wrap; margin:0; }
         .bs-pills input[type=radio], .bs-pills input[type=checkbox] { display:none; }
         .bs-pills label { display:inline-flex; align-items:center; padding:8px 14px; border-radius:6px; cursor:pointer;
-                           color:var(--bs-faint) !important; font-size:11px !important; font-weight:600; letter-spacing:.02em;
+                           color:var(--bs-faint) !important; font-size:17px !important; font-weight:600; letter-spacing:.02em;
                            margin:0 !important; transition:all .15s ease; white-space:nowrap; }
         .bs-pills label:has(input:checked) { background: var(--bs-accent); color: var(--bs-bg) !important;
                                               box-shadow: 0 0 10px rgba(52,211,153,0.3); }
@@ -807,32 +862,67 @@ ui <- shinydashboard::dashboardPage(
           background: var(--bs-accent) !important; border-color: var(--bs-accent) !important;
         }
         .bs-control .irs-line { background: #2a2e35 !important; border-color: #2a2e35 !important; }
-        .bs-control label { color: var(--bs-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+        .bs-control label { color: var(--bs-faint); font-size: 17px; text-transform: uppercase; letter-spacing: .08em; }
 
         /* ---- badges (Station Square scenario indicator) ---- */
-        .bs-badge { padding: 0.15rem 0.7rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
+        .bs-badge { padding: 0.15rem 0.7rem; border-radius: 12px; font-size: 1.22rem; font-weight: 600; }
 
         /* ---- tables / DT ---- */
-        table.dataTable { background: var(--bs-card) !important; color: var(--bs-ink) !important; }
+        /* DataTables ships its own ~13px default, unrelated to the rest of
+           the page's type scale -- explicit here so tables read at the same
+           big-screen-legible size as everything around them. */
+        table.dataTable { background: var(--bs-card) !important; color: var(--bs-ink) !important; font-size: 17px !important; }
         table.dataTable thead th { color: var(--bs-faint) !important; border-bottom: 1px solid var(--bs-border) !important; }
         table.dataTable tbody td { border-color: var(--bs-border) !important; }
+        /* DataTables' own stripe theme hard-codes #f9f9f9 (odd) / white (even)
+           row backgrounds, which otherwise win over the dark theme above and
+           leave near-white rows with barely-visible text -- override both
+           explicitly rather than relying on the generic rule to cascade in. */
+        table.dataTable tbody tr,
+        table.dataTable.stripe tbody tr.odd, table.dataTable.display tbody tr.odd,
+        table.dataTable.stripe tbody tr.even, table.dataTable.display tbody tr.even,
+        table.dataTable.stripe tbody tr.odd td, table.dataTable.display tbody tr.odd td,
+        table.dataTable.stripe tbody tr.even td, table.dataTable.display tbody tr.even td {
+          background-color: var(--bs-card) !important; color: var(--bs-ink) !important;
+        }
+        table.dataTable tbody tr:hover,
+        table.dataTable.stripe tbody tr.odd:hover, table.dataTable.display tbody tr.odd:hover,
+        table.dataTable.stripe tbody tr.even:hover, table.dataTable.display tbody tr.even:hover {
+          background-color: var(--bs-bg) !important;
+        }
         .dataTables_wrapper .dataTables_paginate .paginate_button { color: var(--bs-ink) !important; }
+        .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter { color: var(--bs-faint) !important; font-size: 15px !important; }
 
         /* ---- misc ---- */
-        .bs-caption { text-align:center; margin-top:7px; color:#6b7480; font-size:9px; letter-spacing:.2em; text-transform:uppercase; }
-        .cta-link { color: var(--bs-accent) !important; font-family:'Space Grotesk',sans-serif; font-size:0.88rem; text-decoration:none; }
+        .bs-caption { text-align:center; margin-top:7px; color:#6b7480; font-size:15px; letter-spacing:.2em; text-transform:uppercase; }
+        .cta-link { color: var(--bs-accent) !important; font-family:'Space Grotesk',sans-serif; font-size:1.35rem; text-decoration:none; }
         .cta-link:hover { text-decoration: underline; }
 
         /* ---- equations (MathJax) ---- */
         .bs-equation { padding: 16px 18px; background: var(--bs-bg); border: 1px solid var(--bs-border);
                         border-radius: 6px; margin-bottom: 12px; overflow-x: auto; color: var(--bs-ink);
-                        font-size: 15px; }
+                        font-size: 23px; }
         .bs-equation .MathJax { color: var(--bs-ink) !important; }
 
+        /* ---- theory panel: Markov / baseline toggle ---- */
+        .bs-theory-tabs { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+        .bs-theory-tab {
+          font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600;
+          letter-spacing: .04em; text-transform: uppercase; color: var(--bs-faint);
+          background: var(--bs-bg); border: 1px solid var(--bs-border); border-radius: 20px;
+          padding: 8px 18px; cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+        }
+        .bs-theory-tab:hover { color: var(--bs-ink); }
+        .bs-theory-tab-active {
+          color: var(--bs-bg) !important; background: var(--bs-accent) !important;
+          border-color: var(--bs-accent) !important;
+        }
+
         /* ---- big reveal number (e.g. top-10 overlap stat) ---- */
-        .flip-number { font-family: 'IBM Plex Mono', monospace; font-size: 2.4rem; font-weight: 600;
+        .flip-number { font-family: 'IBM Plex Mono', monospace; font-size: 3.65rem; font-weight: 600;
                         color: var(--bs-accent); text-shadow: 0 0 18px rgba(52,211,153,0.35); }
-        .flip-caption { font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; color: var(--bs-faint); }
+        .flip-caption { font-family: 'Space Grotesk', sans-serif; font-size: 1.28rem; color: var(--bs-faint); }
 
         /* ---- real Leaflet maps ----
            Basemap tiles (Esri World Dark Gray Base) are already dark and
@@ -846,13 +936,13 @@ ui <- shinydashboard::dashboardPage(
         .leaflet-control-zoom a:hover { background: #23262c !important; }
         .leaflet-control-layers-expanded {
           background: var(--bs-card) !important; color: var(--bs-soft) !important;
-          border: 1px solid var(--bs-border) !important; font-size: 11.5px !important;
+          border: 1px solid var(--bs-border) !important; font-size: 17.5px !important;
         }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--bs-card) !important; color: var(--bs-ink) !important; }
         .leaflet-bar a { border-color: var(--bs-border) !important; }
         .info.legend { background: var(--bs-card) !important; color: var(--bs-soft) !important;
                         border: 1px solid var(--bs-border) !important; border-radius: 6px !important;
-                        padding: 8px 10px !important; font-size: 11px !important; line-height: 1.5 !important; }
+                        padding: 8px 10px !important; font-size: 17px !important; line-height: 1.5 !important; }
         /* The level legend exists in the DOM from first render (Leaflet
            needs the addLegend() call regardless), but the layer itself is
            off by default -- hidden here so there's no legend showing
@@ -863,12 +953,12 @@ ui <- shinydashboard::dashboardPage(
         /* Responsive */
         @media (max-width: 900px) {
           .bs-hero, .bs-grid-2, .bs-grid-3, .bs-grid-4, .bs-roadmap { grid-template-columns: 1fr; }
-          .bs-title { font-size: 38px; }
+          .bs-title { font-size: 57.5px; }
         }
         @media (max-width: 640px) {
           .bs-shell { padding: 18px 8px; }
           .bs-header-top { flex-direction: column; gap: 4px; }
-          .bs-title { font-size: 34px; }
+          .bs-title { font-size: 51.5px; }
           .bs-nav-link { padding: 8px 10px; }
           .bs-roadmap { grid-template-columns: 1fr; }
         }
@@ -961,6 +1051,35 @@ ui <- shinydashboard::dashboardPage(
           $(document).on('shown.bs.tab', function(){ setTimeout(fixRealMapSizes, 300); });
           $(window).on('resize', fixRealMapSizes);
         });
+      ")),
+      
+      # Plain client-side show/hide for the Overview tab's theory panel --
+      # deliberately NOT routed through a Shiny input/observer. It's pure
+      # presentation state (is a div visible, which of two sub-panels is
+      # showing), so a vanilla onclick is simpler and has zero server round
+      # trip; nothing here needs to be reactive or persisted.
+      tags$script(HTML("
+        function bsToggleTheory(){
+          var panel = document.getElementById('bs-theory-panel');
+          var link = document.getElementById('bs-theory-toggle-link');
+          if (!panel) return;
+          var opening = (panel.style.display === 'none' || !panel.style.display);
+          panel.style.display = opening ? 'block' : 'none';
+          if (link) link.textContent = opening ? 'Hide the theory \\u2191' : 'See the theory \\u2193';
+          if (opening) { setTimeout(function(){ panel.scrollIntoView({behavior:'smooth', block:'start'}); }, 30); }
+        }
+        function bsShowTheoryTab(which){
+          var markovBody = document.getElementById('theory-markov-body');
+          var baselineBody = document.getElementById('theory-baseline-body');
+          var markovTab = document.getElementById('theory-tab-markov');
+          var baselineTab = document.getElementById('theory-tab-baseline');
+          if (!markovBody || !baselineBody) return;
+          var showMarkov = (which === 'markov');
+          markovBody.style.display = showMarkov ? 'block' : 'none';
+          baselineBody.style.display = showMarkov ? 'none' : 'block';
+          if (markovTab) markovTab.classList.toggle('bs-theory-tab-active', showMarkov);
+          if (baselineTab) baselineTab.classList.toggle('bs-theory-tab-active', !showMarkov);
+        }
       "))
     ),
     
@@ -971,7 +1090,7 @@ ui <- shinydashboard::dashboardPage(
     # uiOutput + a one-way reactive flag defers that fetch until the user
     # first navigates there, and never re-fires it after.
     uiOutput("mathjax_loader"),
-
+    
     div(class = "bs-shell",
         
         # ---- header ----
@@ -1140,8 +1259,169 @@ ui <- shinydashboard::dashboardPage(
                         h2(class = "bs-card-title", "Markov accessibility"),
                         p(class = "bs-card-subtitle",
                           "A homogeneous Markov chain over network travel times, cross-checked two independent ",
-                          "ways and against a topology-free baseline.")
+                          "ways and against a topology-free baseline."),
+                        tags$a(id = "bs-theory-toggle-link", href = "javascript:void(0)",
+                               onclick = "bsToggleTheory(); return false;", class = "cta-link",
+                               "See the theory ↓")
                     )
+                )
+            ),
+            
+            # ------------------------------------------------------------
+            # MARKOV CHAIN THEORY -- the underlying accessibility model
+            # explained in full, not just named. Sits below the four-tile
+            # methodology summary above: that card says *what* each
+            # technique does in one line; this one is *how* the Markov
+            # chain specifically gets from a road network to a single
+            # accessibility number per unit, since that's the model behind
+            # every number on Real Findings, Station Square and Anomaly.
+            # Same three-step construction actually implemented in
+            # compute_models() above (toy network) and in the two rendered
+            # Rmd reports (real network) -- not a separate simplified
+            # explanation, the same math.
+            # ------------------------------------------------------------
+            # Collapsed by default (display:none) and opened by the "See
+            # the theory" link on the Markov accessibility tile above --
+            # bsToggleTheory()/bsShowTheoryTab() in the tags$script block
+            # near the top of this UI. Two sub-panels share this one card:
+            # the Markov chain construction (unchanged from before) and,
+            # new, the topology-free baseline it's compared against
+            # everywhere else in the app -- same Part F definition used in
+            # the real analysis (02_application_analysis.Rmd), not a
+            # separate simplified description.
+            div(class = "bs-card", id = "bs-theory-panel", style = "display:none;",
+                p(class = "bs-section-kicker", "Theory"),
+                div(class = "bs-theory-tabs",
+                    tags$button(id = "theory-tab-markov", class = "bs-theory-tab bs-theory-tab-active",
+                                onclick = "bsShowTheoryTab('markov')", type = "button",
+                                "Markov chain model"),
+                    tags$button(id = "theory-tab-baseline", class = "bs-theory-tab",
+                                onclick = "bsShowTheoryTab('baseline')", type = "button",
+                                "Baseline model")
+                ),
+                
+                # ---- Markov chain sub-panel (unchanged content) --------
+                div(id = "theory-markov-body", style = "display:block;",
+                    h2(class = "bs-card-title", "How the Markov chain accessibility model actually works"),
+                    p(class = "bs-card-subtitle",
+                      "Every \u201cstationary probability\u201d figure in this app \u2014 on Real Findings, Station Square ",
+                      "and Anomaly \u2014 comes from the same three-step construction: turn the road network into a ",
+                      "random walk, then solve for where that walk spends its time in the long run. A unit that a ",
+                      "long-run random walker visits often is, by this definition, accessible \u2014 not necessarily ",
+                      "central geographically, but central to how the network actually connects."),
+                    div(class = "bs-grid-3",
+                        div(class = "bs-card",
+                            p(class = "bs-section-kicker", "1. Transition probabilities"),
+                            div(class = "bs-equation",
+                                helpText("$$P_{ij} \\;=\\; \\frac{w_{ij}}{\\sum_{k} w_{ik}}, \\qquad w_{ij} \\;=\\; \\frac{1}{t_{ij}}$$")),
+                            p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
+                              "Every pair of network-adjacent units ", tags$em("i"), " and ", tags$em("j"),
+                              " gets an edge weight ", math_sub_tag("w", "ij"), " \u2014 the inverse of the travel time ",
+                              math_sub_tag("t", "ij"), " between them, so faster/shorter connections pull more of the walk ",
+                              "towards themselves. Row-normalising by unit ", tags$em("i"), "'s total outgoing weight ",
+                              "turns those weights into real transition probabilities: everywhere a walker at ",
+                              tags$em("i"), " could go next, weighted by how easy each option is to reach.")
+                        ),
+                        div(class = "bs-card",
+                            p(class = "bs-section-kicker", "2. Stationary distribution"),
+                            div(class = "bs-equation",
+                                helpText("$$\\pi P \\;=\\; \\pi, \\qquad \\sum_{i} \\pi_i \\;=\\; 1$$")),
+                            p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
+                              "\u03c0 is the one probability distribution over units that the walk settles into and ",
+                              "never drifts away from, no matter where it started \u2014 the definition of ",
+                              "\u201cstationary.\u201d ", tags$span("\u03c0", tags$sub(tags$em("i"))), " is exactly the long-run fraction of time ",
+                              "the walker spends at unit ", tags$em("i"), ", which is what this app reports as that ",
+                              "unit's accessibility.")
+                        ),
+                        div(class = "bs-card",
+                            p(class = "bs-section-kicker", "3. Solving for \u03c0"),
+                            div(class = "bs-equation",
+                                helpText("$$v^{(t+1)} \\;=\\; v^{(t)} P, \\qquad \\pi \\;=\\; \\lim_{t \\to \\infty} v^{(t)}$$")),
+                            p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
+                              "Starting from any distribution ", tags$em("v"), " (evenly spread across units, here) ",
+                              "and repeatedly applying ", tags$em("P"), " converges on \u03c0 \u2014 power iteration, ",
+                              "the same method used throughout this app. Convergence is guaranteed because each ",
+                              "connected piece of the network makes ", tags$em("P"), " irreducible (every unit ",
+                              "reachable from every other) and a small self-loop keeps it aperiodic.")
+                        )
+                    ),
+                    p(style = "font-size:1.28rem; color:var(--bs-faint); margin-top:14px; margin-bottom:0;",
+                      tags$strong("Why the network splits into two chains: "),
+                      "a stationary distribution only exists for an irreducible chain, and the real Amsterdam road ",
+                      "network is not fully connected \u2014 a smaller landmass in the south-east has no path to the ",
+                      "main network at all. \u03c0 is therefore solved separately for each connected component (see ",
+                      "the choropleth on Real Findings), and the two components' raw probabilities are not directly ",
+                      "comparable to each other, only within themselves. ",
+                      tags$strong("Why three variants: "),
+                      math_sub_tag("P", "time"), ", ", math_sub_tag("P", "speed"), " and ", math_sub_tag("P", "observed"),
+                      " each rebuild ", math_sub_tag("t", "ij"), " from a different travel-",
+                      "time estimate for the same edge, run through the exact same three-step construction above \u2014 ",
+                      "independent cross-checks of the same model rather than three different models, compared ",
+                      "against each other and against a topology-free baseline (expected travel time with no ",
+                      "random-walk structure at all) on the Real Findings tab's agreement heatmap. See The Methods ",
+                      "has a small interactive version of this exact construction on a toy network, and Anomaly ",
+                      "shows \u03c0 recomputed live as edges are removed.")
+                ),
+                
+                # ---- Baseline (Part F) sub-panel -- new -----------------
+                # Definition matches the real pipeline exactly (Part F of
+                # 02_application_analysis.Rmd / WR_application_analysis.Rmd):
+                # a per-segment expected travel time from posted-limit speed
+                # and length, aggregated up to a per-unit "minutes per km"
+                # figure with no network/shortest-path reasoning at all --
+                # deliberately the naive comparison point for the Markov
+                # model's network-aware ranking.
+                div(id = "theory-baseline-body", style = "display:none;",
+                    h2(class = "bs-card-title", "How the topology-free baseline model works"),
+                    p(class = "bs-card-subtitle",
+                      "Every \u201ctopology-free baseline\u201d figure in this app \u2014 on the ",
+                      "Real Findings agreement heatmap, the Anomaly tab's side-by-side maps, and the Overview ",
+                      "roadmap above \u2014 is this same two-step construction: a purely local travel-time figure ",
+                      "for each road segment, aggregated up to one number per unit, with no notion of how well ",
+                      "that unit connects to the rest of the network. It exists for two reasons: as the naive ",
+                      "benchmark the network-aware Markov ranking is compared against, and because its per-",
+                      "segment travel times are exactly the ", math_sub_tag("t", "ij"), " edge weights the Markov model's ",
+                      "own transition probabilities are built from (see the Markov chain tab)."),
+                    div(class = "bs-grid-2",
+                        div(class = "bs-card",
+                            p(class = "bs-section-kicker", "1. Segment expected travel time"),
+                            div(class = "bs-equation",
+                                helpText("$$t_e \\;=\\; \\frac{\\ell_e}{s_e} \\times 60$$")),
+                            p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
+                              "Every road segment ", tags$em("e"), " gets an expected free-flow travel time in ",
+                              "minutes, from its length ", math_sub_tag("\u2113", "e", italic_base = FALSE),
+                              " in kilometres and an assumed speed ", math_sub_tag("s", "e"),
+                              " in km/h \u2014 the measured speed where one exists, ",
+                              "otherwise a class-based default (e.g. 30 km/h for a residential street). This ",
+                              "needs no traffic measurements at all, so unlike every Markov variant it covers ",
+                              "the entire network, but it also assumes free-flowing traffic throughout \u2014 no ",
+                              "congestion, signals, or time-of-day effects.")
+                        ),
+                        div(class = "bs-card",
+                            p(class = "bs-section-kicker", "2. Per-unit aggregation"),
+                            div(class = "bs-equation",
+                                helpText("$$\\text{baseline}_i \\;=\\; \\left(\\frac{\\sum_{e \\in i} t_e}{\\sum_{e \\in i} \\ell_e}\\right)^{-1}$$")),
+                            p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
+                              "Summing segment travel time and segment length separately over every road that ",
+                              "falls inside unit ", tags$em("i"), " gives that unit's own minutes-per-kilometre ",
+                              "figure; inverting it turns \u201cslower local roads\u201d into a lower score, so higher ",
+                              "still reads as \u201cmore accessible,\u201d consistent with the Markov side. Nothing here ",
+                              "looks outside unit ", tags$em("i"), " itself \u2014 two units with identical local ",
+                              "roads score identically regardless of whether one sits at the network's core and ",
+                              "the other dead-ends off it, which is exactly the gap the Markov model exists to ",
+                              "close.")
+                        )
+                    ),
+                    p(style = "font-size:1.28rem; color:var(--bs-faint); margin-top:14px; margin-bottom:0;",
+                      tags$strong("Why the two models barely agree: "),
+                      "the real-data analysis finds only a weak, often negative rank correlation between this ",
+                      "baseline and the Markov ranking (Spearman \u03c1 \u2248 \u22120.06 to \u22120.16 against ",
+                      math_sub_tag("P", "time"), "). A ",
+                      "unit can have fast, free-flowing local roads and still score low on the Markov model if ",
+                      "those roads lead nowhere useful \u2014 or the reverse, slower local roads that happen to sit ",
+                      "on the shortest path between many other units. That divergence is the headline result: ",
+                      "accessibility depends on network topology, not on local road speed alone, so the two ",
+                      "models are measuring genuinely different things rather than one approximating the other.")
                 )
             )
           ),
@@ -1158,9 +1438,9 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-card-subtitle",
                   "Every figure below is read directly from the two rendered companion reports \u2014 the full ",
                   "motorised road network, and a second version with residential, unclassified, and ",
-                  "living_street roads stripped out."),
+                  "living street roads stripped out."),
                 div(class = "bs-switch-row",
-                    tags$span(style = "font-size:0.82rem; color:var(--bs-faint);", "Viewing:"),
+                    tags$span(style = "font-size:1.24rem; color:var(--bs-faint);", "Viewing:"),
                     div(class = "bs-pills",
                         radioButtons("scenario_real", NULL, inline = TRUE,
                                      choices = c("Full network", "No residential roads"),
@@ -1186,33 +1466,33 @@ ui <- shinydashboard::dashboardPage(
                     div(class = "bs-kpi-value", textOutput("real_largest_share", inline = TRUE))
                 )
             ),
-
+            
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "The actual streets, not a diagram"),
                 h2(class = "bs-card-title", "The real Amsterdam road network"),
                 p(class = "bs-card-subtitle",
-                  "Every line here is a real road segment from the same OSM extract the analysis runs on — ",
-                  "21,605 of them. Flip the switch above to “No residential roads” and the residential layer ",
-                  "hides itself here too — literally what that scenario removes — or untick it yourself any ",
+                  "Every line here is a real road segment from the same OSM extract the analysis runs on \u2014 ",
+                  "21,605 of them. Flip the switch above to \u201cNo residential roads\u201d and the residential layer ",
+                  "hides itself here too \u2014 literally what that scenario removes \u2014 or untick it yourself any ",
                   "time in the layer picker. The choropleth layer is off by default, so the roads read clearly ",
-                  "first — tick “Neighbourhood accessibility” to shade every unit by its Markov ",
+                  "first \u2014 tick \u201cNeighbourhood accessibility\u201d to shade every unit by its Markov ",
                   "stationary probability for whichever scenario is currently selected, and click a ",
                   "neighbourhood for its exact value. The road network itself splits into two disconnected ",
-                  "pieces — the main network and a ",
-                  "smaller landmass in the south-east — so the Markov chain is run separately on each; both ",
+                  "pieces \u2014 the main network and a ",
+                  "smaller landmass in the south-east \u2014 so the Markov chain is run separately on each; both ",
                   "are shown combined here on the same colour scale, but a unit's colour reflects its ",
                   "standing within its own component only, since the two chains' raw probabilities aren't ",
                   "numerically comparable (the tooltip flags this for the smaller component's units). ",
-                  "Tick “Sensor coverage” to overlay all 693 real monitoring locations, coloured by whether ",
-                  "each one actually has data — the coverage-bias story from the Overview tab, on the real map."),
+                  "Tick \u201cSensor coverage\u201d to overlay all 693 real monitoring locations, coloured by whether ",
+                  "each one actually has data \u2014 the coverage-bias story from the Overview tab, on the real map."),
                 leafletOutput("real_road_map", height = "540px"),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
-                  span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
-                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads · ",
-                  span(style = paste0("color:", col_sensor_on, "; font-weight:600;"), "●"), " Observed sensor · ",
-                  span(style = paste0("color:", col_sensor_off, "; font-weight:600;"), "●"), " Unobserved sensor")
+                  span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "\u2014"), " Non-residential roads \u00b7 ",
+                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "\u2014"), " Residential roads \u00b7 ",
+                  span(style = paste0("color:", col_sensor_on, "; font-weight:600;"), "\u25cf"), " Observed sensor \u00b7 ",
+                  span(style = paste0("color:", col_sensor_off, "; font-weight:600;"), "\u25cf"), " Unobserved sensor")
             ),
-
+            
             div(class = "bs-grid-2",
                 div(class = "bs-card",
                     p(class = "bs-section-kicker", "Top 10"),
@@ -1226,8 +1506,9 @@ ui <- shinydashboard::dashboardPage(
                     p(class = "bs-section-kicker", "Agreement"),
                     h2(class = "bs-card-title", "How the four accessibility measures agree"),
                     p(class = "bs-card-subtitle",
-                      "Spearman correlation between every pair of P_time, P_speed, the observed-speed variant, ",
-                      "and the topology-free Part F baseline. Hover a cell for the exact \u03c1."),
+                      "Spearman correlation between every pair of ", math_sub_tag("P", "time"), ", ",
+                      math_sub_tag("P", "speed"), ", the observed-speed variant, ",
+                      "and the topology-free baseline. Hover a cell for the exact \u03c1."),
                     plotlyOutput("real_corr_heat", height = "380px")
                 )
             ),
@@ -1272,7 +1553,7 @@ ui <- shinydashboard::dashboardPage(
                 )
             ),
             
-            p(style = "color:#6b7480; font-size:0.83rem;",
+            p(style = "color:#6b7480; font-size:1.26rem;",
               em("Nothing on this tab is simulated \u2014 every number is read straight off the reports' ",
                  "rendered output."))
           ),
@@ -1289,7 +1570,7 @@ ui <- shinydashboard::dashboardPage(
                 uiOutput("station_intro_callout"),
                 br(),
                 div(style = "display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap;",
-                    tags$span(style = "font-size:0.82rem; color:var(--bs-faint);", "Viewing:"),
+                    tags$span(style = "font-size:1.24rem; color:var(--bs-faint);", "Viewing:"),
                     div(class = "bs-pills",
                         radioButtons("scenario_station", NULL, inline = TRUE,
                                      choices = c("Full network", "No residential roads"),
@@ -1307,7 +1588,7 @@ ui <- shinydashboard::dashboardPage(
                     uiOutput("station_reveal_body")
                 )
             ),
-
+            
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "Where the exception actually is"),
                 h2(class = "bs-card-title", "Amsterdam Centraal, on the real network"),
@@ -1323,11 +1604,11 @@ ui <- shinydashboard::dashboardPage(
                   "colours aren't numerically comparable to the main network's."),
                 leafletOutput("station_road_map", height = "480px"),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
-                  span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "—"), " Non-residential roads · ",
-                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "—"), " Residential roads · ",
-                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "●"), " Exception bridge")
+                  span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "\u2014"), " Non-residential roads \u00b7 ",
+                  span(style = paste0("color:", col_road_local, "; font-weight:600;"), "\u2014"), " Residential roads \u00b7 ",
+                  span(style = paste0("color:", col_amber, "; font-weight:600;"), "\u25cf"), " Exception bridge")
             ),
-
+            
             div(class = "bs-callout",
                 tags$strong("Why does this matter? \u2014"),
                 "It's a concrete, checkable example of exactly the gap this research is about: two ",
@@ -1352,7 +1633,8 @@ ui <- shinydashboard::dashboardPage(
                   "clickable. Every number on this tab is simulated live; nothing here is a research finding."),
                 div(class = "bs-pills",
                     radioButtons("methods_view", NULL, inline = TRUE,
-                                 choices = c("Coverage bias" = "coverage", "Network KDE" = "kde", "K-function" = "kfun"),
+                                 choices = c("Coverage bias" = "coverage", "Network KDE" = "kde", "K-function" = "kfun",
+                                             "Why it matters" = "relevance"),
                                  selected = "coverage"))
             ),
             
@@ -1390,9 +1672,9 @@ ui <- shinydashboard::dashboardPage(
                   p(class = "bs-section-kicker", "Network kernel density"),
                   div(class = "bs-equation",
                       helpText("$$\\hat{f}(s) \\;=\\; \\sum_{i} K\\!\\left(\\frac{d_L(s, x_i)}{h}\\right)$$")),
-                  p(style = "font-size:0.85rem; color:var(--bs-soft); margin:0;",
+                  p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
                     "Density spreads only along connected road segments, not freely across the plane, where ",
-                    tags$em("d_L"), " is shortest-path network distance and ", tags$em("h"),
+                    math_sub_tag("d", "L"), " is shortest-path network distance and ", tags$em("h"),
                     " is the bandwidth \u03c3 below. Bright segments sit close to many sensors; dark segments ",
                     "are blind spots even if they carry real traffic.")
               ),
@@ -1411,8 +1693,8 @@ ui <- shinydashboard::dashboardPage(
                           actionButton("bw_balanced", "Balanced", class = "btn btn-sm btn-outline-light"),
                           actionButton("bw_wide", "Wide", class = "btn btn-sm btn-outline-light")),
                       div(class = "bs-control", sliderInput("bandwidth", "\u03c3 (metres)", min = 150, max = 2000, value = 600, step = 50)),
-                      p(style = "font-size:0.85rem; color:var(--bs-faint);",
-                        "Small \u03c3 shows individual sensor clusters; large \u03c3 smooths toward the coverage ",
+                      p(style = "font-size:1.28rem; color:var(--bs-faint);",
+                        "Small \u03c3 shows individual sensor clusters; large \u03c3 smooths towards the coverage ",
                         "bias between the highway spine and the residential grid.")
                   )
               )
@@ -1424,7 +1706,7 @@ ui <- shinydashboard::dashboardPage(
                   p(class = "bs-section-kicker", "Linear network K-function"),
                   div(class = "bs-equation",
                       helpText("$$K(r) \\;=\\; \\frac{1}{\\lambda} \\times E[\\text{additional events within network distance } r]$$")),
-                  p(style = "font-size:0.85rem; color:var(--bs-soft); margin:0;",
+                  p(style = "font-size:1.28rem; color:var(--bs-soft); margin:0;",
                     "Compared against a Monte Carlo envelope from placing the same number of points uniformly ",
                     "at random on the network. Above the envelope means clustering; below means more regular ",
                     "spacing than chance.")
@@ -1444,6 +1726,47 @@ ui <- shinydashboard::dashboardPage(
                       div(class = "bs-control", selectInput("n_sim", "Monte Carlo simulations", choices = c(49, 99, 199, 399), selected = 199)),
                       div(class = "bs-control", sliderInput("r_max", "Maximum r (metres)", min = 800, max = 3500, value = 2200, step = 200))
                   )
+              )
+            ),
+            
+            # ------------------------------------------------------------
+            # WHY IT MATTERS -- a short bridge between the three spatial-
+            # statistics mini-tabs above (coverage / KDE / K-function, all
+            # about *where sensors are*) and the two accessibility models
+            # used everywhere else in the app (about *how accessible a
+            # neighbourhood is*). Wording draws directly on the research
+            # report's own framing (abstract and methodology), not a
+            # separate simplified story -- see the full report for the
+            # complete numerical results and discussion.
+            # ------------------------------------------------------------
+            conditionalPanel(
+              "input.methods_view == 'relevance'",
+              div(class = "bs-card",
+                  p(class = "bs-section-kicker", "The link back to accessibility"),
+                  h2(class = "bs-card-title", "Why coverage bias matters for accessibility modelling"),
+                  p(class = "bs-card-subtitle",
+                    "The availability audit, network KDE, and K-function above aren't a separate exercise from ",
+                    "the Markov chain and baseline models used everywhere else in this app — they're the ",
+                    "diagnostic step that has to come first. Before an accessibility estimate can be trusted, ",
+                    "it matters whether the travel-time data behind it is complete and representative of the ",
+                    "whole network, or concentrated on a handful of arterial roads."),
+                  p(style = "font-size:1.28rem; color:var(--bs-soft);",
+                    "KDE shows ", tags$em("where"), " monitoring is dense or sparse; the K-function tests ",
+                    "whether that pattern departs from pure chance along the roads that do carry sensors — ",
+                    "one descriptive, one inferential. Together they flag exactly the areas where an ",
+                    "accessibility figure is standing on real, measured data rather than a class-based speed ",
+                    "assumption, and exactly which segments the observed-speed Markov variant is even allowed ",
+                    "to use a measured value for on Real Findings."),
+                  div(class = "bs-callout", style = "margin-top:0.8rem;",
+                      tags$strong("The bigger picture: "),
+                      "in the real Amsterdam network behind this app, only 1.6% of edges (5.2% of arterial ",
+                      "roads) carry a sensor at all — so these coverage statistics aren't a formality, they're ",
+                      "the difference between an accessibility ranking backed by evidence and one that's ",
+                      "mostly assumption. That's the whole point of the network-based spatial statistics used ",
+                      "here: not just measuring how uneven monitoring is, but showing exactly where it's ",
+                      "uneven, so new monitoring can be targeted where it would actually improve accessibility ",
+                      "estimates. See the full research report for the complete numerical results and ",
+                      "discussion of what this means for Amsterdam specifically.")
               )
             )
           ),
@@ -1547,20 +1870,23 @@ server <- function(input, output, session) {
   observeEvent(input$goto_station, shinydashboard::updateTabItems(session, "tabs", selected = "station"))
   observeEvent(input$goto_methods, shinydashboard::updateTabItems(session, "tabs", selected = "methods"))
   observeEvent(input$goto_anomaly, shinydashboard::updateTabItems(session, "tabs", selected = "anomaly"))
-
-  # MathJax is only needed for the two LaTeX formulas on "See The Methods" --
-  # deferred here until that tab is first opened (see uiOutput("mathjax_
-  # loader") in the UI), rather than fetched from the CDN on every session's
-  # very first paint regardless of whether anyone ever visits that tab.
+  
+  # MathJax is needed for the LaTeX formulas on "See The Methods" and (now)
+  # the Markov theory tile on Overview -- since Overview is the default
+  # landing tab, this fires on essentially every session's first paint
+  # regardless, but the deferred-load mechanism is kept as-is (rather than
+  # calling withMathJax() unconditionally) so a session that somehow lands
+  # straight on a different tab, or a future reordering of the sidebar,
+  # still doesn't pay the CDN fetch until a formula is actually on screen.
   mathjax_loaded <- reactiveVal(FALSE)
   observeEvent(input$tabs, {
-    if (identical(input$tabs, "methods")) mathjax_loaded(TRUE)
+    if (input$tabs %in% c("home", "methods")) mathjax_loaded(TRUE)
   })
   output$mathjax_loader <- renderUI({
     req(mathjax_loaded())
     withMathJax()
   })
-
+  
   # ---------------------------------------------------- Real Amsterdam data
   # A single shared scenario value, kept in sync across the two pill
   # selectors (Real Findings and Station Square) so flipping either one
@@ -1599,7 +1925,7 @@ server <- function(input, output, session) {
           "the eigen and power-iteration methods disagree by up to ", tags$code(round(r$eigen_power_gap, 5)),
           " in stationary probability, and PageRank only correlates ", tags$code(r$pagerank_cor),
           " with the stationary ranking. Flip the switch to see what happens once residential/unclassified/",
-          "living_street roads are removed.")
+          "living street roads are removed.")
     } else {
       div(class = "bs-callout",
           tags$strong("No residential roads: "), "the same cross-check now agrees to within ",
@@ -1617,7 +1943,7 @@ server <- function(input, output, session) {
                      text = paste0(unit, ": ", signif(stationary_prob, 3)))) +
         geom_col(fill = col_signal) +
         labs(x = "Stationary probability", y = NULL) +
-        theme_minimal(base_size = 12) +
+        theme_minimal(base_size = 17) +
         theme(panel.background = element_rect(fill = col_bg, color = NA),
               plot.background  = element_rect(fill = col_bg, color = NA),
               panel.grid = element_line(color = "#262a31"),
@@ -1630,7 +1956,8 @@ server <- function(input, output, session) {
   output$real_corr_heat <- renderPlotly({
     m <- real_corr_matrix[[real_scenario()]]
     plot_ly(
-      x = colnames(m), y = rownames(m), z = m, type = "heatmap",
+      x = unname(real_corr_axis_labels[colnames(m)]), y = unname(real_corr_axis_labels[rownames(m)]),
+      z = m, type = "heatmap",
       colorscale = diverging_pal, zmin = -1, zmax = 1,
       text = matrix(sprintf("%.2f", m), nrow(m)), hoverinfo = "text",
       showscale = TRUE
@@ -1668,13 +1995,19 @@ server <- function(input, output, session) {
                             paste0(ifelse(diff >= 0, "+", ""), format(round(diff, 4), big.mark = ","))),
         `Relative change` = ifelse(is_correlation, "\u2014", paste0(ifelse(pct_change >= 0, "+", ""), round(pct_change, 1), "%"))
       )
-    datatable(df, options = list(pageLength = 6, dom = "t"), rownames = FALSE)
+    # escape = FALSE: the Metric column carries the <i>/<sub> markup from
+    # math_sub_html() above (e.g. P_time -> proper "P" with a true
+    # subscript "time") rather than a literal underscore -- nothing else
+    # in this data frame contains user input or untrusted text, so this is
+    # safe to leave unescaped.
+    datatable(df, escape = FALSE, options = list(pageLength = 6, dom = "t"), rownames = FALSE)
   })
   
   output$real_corr_diff_heat <- renderPlotly({
     m <- real_corr_diff
     plot_ly(
-      x = colnames(m), y = rownames(m), z = m, type = "heatmap",
+      x = unname(real_corr_axis_labels[colnames(m)]), y = unname(real_corr_axis_labels[rownames(m)]),
+      z = m, type = "heatmap",
       colorscale = diverging_pal, zmin = -max(abs(m)), zmax = max(abs(m)),
       text = matrix(sprintf("%+.2f", m), nrow(m)), hoverinfo = "text",
       showscale = TRUE
@@ -1708,7 +2041,7 @@ server <- function(input, output, session) {
   # installed version of that package, and calling a function that doesn't
   # exist inside an observer crashes the whole app session, not just that
   # one feature.
-
+  
   # ---------------------------------------------------- Real road-network map
   # The actual Amsterdam road geometry (see the GeoJSON loading block near
   # the top). Built once via renderLeaflet, then the neighbourhood
@@ -1719,7 +2052,7 @@ server <- function(input, output, session) {
     base_road_leaflet(isolate(real_scenario())) %>%
       setView(lng = 4.895, lat = 52.372, zoom = 12)
   })
-
+  
   observeEvent(real_scenario(), {
     proxy <- leafletProxy("real_road_map") %>%
       clearGroup("Neighbourhood accessibility") %>%
@@ -1731,13 +2064,13 @@ server <- function(input, output, session) {
       proxy %>% showGroup("Residential roads")
     }
   }, ignoreInit = TRUE)
-
+  
   observeEvent(input$real_road_map_geojson_click, {
     tip <- input$real_road_map_geojson_click$properties$tip
     req(tip)
     showNotification(tip, type = "message", duration = 5)
   })
-
+  
   # ------------------------------------------------------- Station Square
   # Was a static sentence hardcoding "Spearman rho = 0.039 across all 445
   # modelled units" -- 0.039 is actually the No-residential-roads value (444
@@ -1749,11 +2082,11 @@ server <- function(input, output, session) {
     div(class = "bs-callout warm",
         span(class = "amber-dot"),
         tags$strong("A road can be critical to a city without anyone wanting to go there."),
-        " Five neighbourhoods act as the busiest “bridges” in Amsterdam's travel-time network ",
-        "— remove any one and the rest of the city gets measurably harder to reach from itself. ",
+        " Five neighbourhoods act as the busiest \u201cbridges\u201d in Amsterdam's travel-time network ",
+        "\u2014 remove any one and the rest of the city gets measurably harder to reach from itself. ",
         "Betweenness centrality identifies all five. But being a bridge and being an individually ",
-        tags$em("accessible"), " place — somewhere a long-run random walker actually ends up ",
-        "— turn out to be almost entirely unrelated (Spearman ρ = ", r$betweenness_accessibility_cor,
+        tags$em("accessible"), " place \u2014 somewhere a long-run random walker actually ends up ",
+        "\u2014 turn out to be almost entirely unrelated (Spearman \u03c1 = ", r$betweenness_accessibility_cor,
         " across all ", r$n_modelled_units, " modelled units). Almost.")
   })
   
@@ -1779,7 +2112,7 @@ server <- function(input, output, session) {
         scale_fill_identity() +
         facet_wrap(~ metric, ncol = 1, scales = "free_y") +
         labs(x = NULL, y = NULL) +
-        theme_minimal(base_size = 12) +
+        theme_minimal(base_size = 17) +
         theme(panel.background = element_rect(fill = col_bg, color = NA),
               plot.background  = element_rect(fill = col_bg, color = NA),
               panel.grid = element_line(color = "#262a31"),
@@ -1819,7 +2152,7 @@ server <- function(input, output, session) {
           "other four bridges are pure shortcuts, with no particular pull of their own.")
     } else {
       div(class = "bs-callout",
-          "Once residential, unclassified, and living_street roads are removed, ", tags$strong("Stationsplein e.o."),
+          "Once residential, unclassified, and living street roads are removed, ", tags$strong("Stationsplein e.o."),
           " doesn't even appear among this network's top-5 bridges any more \u2014 the shortest paths that made ",
           "it a chokepoint evidently ran, in part, through local streets that no longer exist here. All five ",
           "bridge units in this version sit close together on accessibility, each near or only modestly above ",
@@ -1839,7 +2172,7 @@ server <- function(input, output, session) {
     base_road_leaflet(isolate(real_scenario())) %>%
       setView(lng = sq$lon[1], lat = sq$lat[1], zoom = 14)
   })
-
+  
   observeEvent(real_scenario(), {
     proxy <- leafletProxy("station_road_map") %>%
       clearGroup("Neighbourhood accessibility") %>%
@@ -1851,7 +2184,7 @@ server <- function(input, output, session) {
       proxy %>% showGroup("Residential roads")
     }
   }, ignoreInit = TRUE)
-
+  
   observeEvent(bridge_data(), {
     df <- bridge_data() %>%
       left_join(admin_centroids %>% select(unit_name, lon, lat), by = c("unit" = "unit_name")) %>%
@@ -1880,8 +2213,8 @@ server <- function(input, output, session) {
     if (nrow(ex) > 0) {
       glow_icon <- tryCatch(
         leaflet::divIcon(className = "glow-marker-wrap",
-                          html = "<div class='amber-dot glow-marker'></div>",
-                          iconSize = c(10, 10), iconAnchor = c(5, 5)),
+                         html = "<div class='amber-dot glow-marker'></div>",
+                         iconSize = c(10, 10), iconAnchor = c(5, 5)),
         error = function(e) NULL
       )
       if (!is.null(glow_icon)) {
@@ -1893,13 +2226,13 @@ server <- function(input, output, session) {
       }
     }
   }, ignoreNULL = FALSE)
-
+  
   observeEvent(input$station_road_map_geojson_click, {
     tip <- input$station_road_map_geojson_click$properties$tip
     req(tip)
     showNotification(tip, type = "message", duration = 5)
   })
-
+  
   # -------------------------------------------------- reactive sensor state
   edges_r <- reactiveVal(edges_df)
   observeEvent(input$resample, {
@@ -1927,7 +2260,7 @@ server <- function(input, output, session) {
                      linewidth = 0.9) +
         scale_color_manual(values = c(`TRUE` = col_signal, `FALSE` = col_void),
                            labels = c(`TRUE` = "Observed", `FALSE` = "Blind spot")) +
-        coord_equal() + theme_void(base_size = 13) +
+        coord_equal() + theme_void(base_size = 18) +
         theme(legend.position = "none",
               plot.background  = element_rect(fill = col_bg, color = NA),
               panel.background = element_rect(fill = col_bg, color = NA))
@@ -1977,7 +2310,7 @@ server <- function(input, output, session) {
                          text = paste0(road_class, "<br>KDE = ", round(kde_value, 4))),
                      linewidth = 1) +
         scale_color_gradientn(colours = grad_pal, name = "Density") +
-        coord_equal() + theme_void(base_size = 13) +
+        coord_equal() + theme_void(base_size = 18) +
         theme(plot.background  = element_rect(fill = col_bg, color = NA),
               panel.background = element_rect(fill = col_bg, color = NA),
               legend.text  = element_text(color = col_text))
@@ -2063,9 +2396,9 @@ server <- function(input, output, session) {
   col_removed <- "#ef4444"
   
   removed_edges_rv <- reactiveVal(integer(0))
-
+  
   observeEvent(input$anomaly_reset, removed_edges_rv(integer(0)))
-
+  
   # Harmless-but-noisy console warning fix: plotly's event_data() warns
   # "source ID ... is not registered" if it's queried before the plot it's
   # watching has actually been drawn client-side -- which, at session
@@ -2076,13 +2409,24 @@ server <- function(input, output, session) {
   # warning has nothing to fire on -- not just a suppressed print, an
   # actual fix.
   anomaly_map_drawn <- reactiveVal(FALSE)
-
+  
   observe({
     req(anomaly_map_drawn())
     click <- suppressWarnings(plotly::event_data("plotly_click", source = "anomaly_map"))
     req(click, click$customdata)
     eid <- as.integer(click$customdata[1])
-    current <- removed_edges_rv()
+    # isolate() is load-bearing here, not cosmetic: this observer both reads
+    # and writes removed_edges_rv(). Reading it reactively (the original
+    # bug) makes this same observer re-fire every time it writes to
+    # removed_edges_rv() -- and since the click's event_data() payload never
+    # changes or clears on its own, each re-fire re-reads the *same* click,
+    # sees the *new* current set, and flips the edge straight back --
+    # forever. That infinite reactive loop pegs the R process at 100% CPU
+    # and makes the whole app unresponsive on a single click (confirmed by
+    # actually driving a headless browser against this app: CPU pegged,
+    # port stopped responding entirely). isolate() breaks the dependency so
+    # this observer only re-runs on an actual new click.
+    current <- isolate(removed_edges_rv())
     if (eid %in% current) {
       # restoring a previously-removed edge is always safe
       removed_edges_rv(setdiff(current, eid))
@@ -2150,7 +2494,7 @@ server <- function(input, output, session) {
              yaxis = list(visible = FALSE, zeroline = FALSE, scaleanchor = "x"),
              showlegend = FALSE, margin = list(l = 0, r = 0, t = 10, b = 0),
              paper_bgcolor = col_bg, plot_bgcolor = col_bg,
-             font = list(color = col_text, family = "Space Grotesk")) %>%
+             font = list(color = col_text, family = "Space Grotesk", size = 15)) %>%
       config(displaylogo = FALSE) %>%
       plotly::event_register("plotly_click")
     anomaly_map_drawn(TRUE)
@@ -2178,7 +2522,7 @@ server <- function(input, output, session) {
         scale_color_identity() +
         scale_linewidth_identity() +
         scale_size_identity() +
-        coord_equal() + theme_void(base_size = 13) +
+        coord_equal() + theme_void(base_size = 18) +
         theme(legend.position = "none",
               plot.background  = element_rect(fill = col_bg, color = NA),
               panel.background = element_rect(fill = col_bg, color = NA))

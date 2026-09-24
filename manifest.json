@@ -2768,16 +2768,13 @@
   },
   "files": {
     ".RData": {
-      "checksum": "320f10c5097e895deb031a7ec4f9ace9"
+      "checksum": "43309b7b8f4e546b34d214fa37ea8811"
     },
     ".RDataTmp": {
       "checksum": "1458af7e05f0708a0a8e6b17b21e9ce8"
     },
     "app.R": {
-      "checksum": "1e13cc48c699b753ebf92d7044930dca"
-    },
-    "app_admin_choropleth_change.json": {
-      "checksum": "464eb887dae7e01351818a0057fa0983"
+      "checksum": "118e195906ba7c8ccf077ef610e729cf"
     },
     "app_admin_choropleth_full.json": {
       "checksum": "63fe064eefb7a636582c52827a77440d"
