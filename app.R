@@ -1259,7 +1259,7 @@ ui <- shinydashboard::dashboardPage(
           document.querySelectorAll('[data-count]').forEach(function(el){
             var target = parseFloat(el.getAttribute('data-count'));
             var dec = parseInt(el.getAttribute('data-dec') || '0', 10);
-            if (reduce) { el.textContent = target.toFixed(dec); return; }
+            if (reduce) { var tv = target.toFixed(dec); el.textContent = el.getAttribute('data-comma') ? Number(tv).toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec}) : tv; return; }
             var start = null, dur = 1500;
             function step(ts){
               if (start === null) start = ts;
@@ -1915,7 +1915,7 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-section-kicker", "Not Amsterdam \u2014 A toy network"),
                 h2(class = "bs-card-title", "What if a segment closes?"),
                 p(class = "bs-card-subtitle",
-                  "Click a road to close it, click again to restore it. The thick diagonal spine is the highway; try it first."),
+                  "Click a road to close it, click again to restore it. Try a small local street first, then the thick diagonal spine (the highway)."),
                 actionButton("anomaly_reset", "\U0001F504 Reset all closures", class = "btn btn-outline-light")
             ),
             
@@ -2016,7 +2016,7 @@ ui <- shinydashboard::dashboardPage(
                         h2(class = "bs-card-title", "How the network is defined matters more than the speed data."),
                         p(class = "bs-card-subtitle bs-keep",
                           "Assumed against observed speeds: \u03C1 = 0.92\u20130.95. Without residential streets, the two top-ten lists share no neighbourhoods."),
-                        actionLink("cc_goto_real", "See the agreement heatmap \u2192", class = "cta-link"))
+                        actionLink("cc_goto_agree", "See the agreement heatmap \u2192", class = "cta-link"))
                 )
             ),
             
@@ -2075,7 +2075,7 @@ server <- function(input, output, session) {
   nav_targets <- c(goto_home = "home", goto_access = "access", goto_methods = "methods",
                    goto_real = "realdata", goto_station = "station", goto_anomaly = "anomaly",
                    goto_conclusion = "conclusion", ov_goto_methods = "methods", ov_goto_access = "access",
-                   ov_goto_real = "realdata", cc_goto_home = "home", cc_goto_real = "realdata")
+                   ov_goto_real = "realdata", cc_goto_home = "home", cc_goto_real = "realdata", cc_goto_agree = "realdata")
   lapply(names(nav_targets), function(id) {
     observeEvent(input[[id]], shinydashboard::updateTabItems(session, "tabs", selected = nav_targets[[id]]),
                  ignoreInit = TRUE)
@@ -2369,6 +2369,7 @@ server <- function(input, output, session) {
   output$station_road_map <- renderLeaflet({
     sq <- admin_centroids %>% filter(is_station_square)
     base_road_leaflet(isolate(real_scenario())) %>%
+      showGroup("Highlight: Station Square") %>%
       setView(lng = sq$lon[1], lat = sq$lat[1], zoom = 14)
   })
   
