@@ -372,7 +372,7 @@ real_model_diagnostics <- tibble(
     paste0(math_sub_html("P", "time"), " \u2194 baseline correlation (Spearman \u03c1)"),
     paste0(math_sub_html("P", "speed"), " \u2194 baseline correlation (Spearman \u03c1)"),
     paste0(math_sub_html("P", "observed"), " \u2194 baseline correlation (Spearman \u03c1)"),
-    "Admin units with a computable baseline score"
+    "Neighbourhoods with a computable baseline score"
   ),
   full = c(
     get_scale("eigen_power_gap", "Full network"),
@@ -1447,7 +1447,7 @@ ui <- shinydashboard::dashboardPage(
                 h2(class = "bs-card-title", style = "font-size: 38px;",
                    "Are traffic sensors a fair sample of the whole road network?"),
                 p(class = "bs-card-subtitle bs-spoken",
-                  "Sensors go where the money goes, mostly highways. If they are not a fair sample, ",
+                  "Sensors are placed by administrative priority, mostly on highways. If they are not a fair sample, ",
                   "does that change what our models say about getting around the city?"),
                 div(class = "bs-gap-grid",
                     div(class = "bs-gap-stat",
@@ -1460,7 +1460,7 @@ ui <- shinydashboard::dashboardPage(
                         div(class = "bs-gap-label", "Coverage"),
                         div(class = "bs-gap-num warm", HTML("<span data-count=\"1.6\" data-dec=\"1\">1.6</span>%")),
                         div(class = "bs-gap-bar", div(class = "bs-gap-fill warm", `data-w` = "1.6")),
-                        div(class = "bs-gap-sub", "of road segments have a sensor at all (5.2% of arterial roads).")
+                        div(class = "bs-gap-sub", "of road segments have a sensor at all (5.2% of non-residential roads).")
                     )
                 ),
                 div(class = "bs-callout warm bs-spoken",
@@ -1601,8 +1601,9 @@ ui <- shinydashboard::dashboardPage(
                     tags$details(class = "bs-more",
                                  tags$summary("Technical notes"),
                                  p("The real Amsterdam network is not fully connected: a small area in the south-east has ",
-                                   "no road link to the main network, so \u03C0 is solved separately for each connected ",
-                                   "component and only compared within a component."),
+                                   "no road link to the main network, so the chain is run on each connected ",
+                                   "component. The report ranks only the main network (445 of 517 neighbourhoods); the small ",
+                                   "south-eastern piece is shown for context and never compared with it."),
                                  p(math_sub_tag("P", "time"), ", ", math_sub_tag("P", "speed"), " and ",
                                    math_sub_tag("P", "observed"), " rebuild ", math_sub_tag("t", "ij"),
                                    " from three different travel-time estimates and run them through the same three steps, ",
@@ -1622,7 +1623,7 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-section-kicker", "The real numbers behind the story"),
                 h2(class = "bs-card-title", "Full network vs. no residential roads"),
                 p(class = "bs-card-subtitle",
-                  "The full motorised network, and a version without residential, unclassified and living street roads."),
+                  "The full motorised network, and a version without residential, unclassified and living-street roads."),
                 div(class = "bs-switch-row",
                     tags$span(style = "font-size:1.24rem; color:var(--bs-faint);", "Viewing:"),
                     div(class = "bs-pills",
@@ -1661,8 +1662,8 @@ ui <- shinydashboard::dashboardPage(
                              tags$summary("More about this map"),
                              p("The \u201cNo residential roads\u201d switch also hides the residential layer here. The network splits into two ",
                                "disconnected pieces, a main network and a small landmass in the south-east, so the Markov chain is run on each ",
-                               "separately. Colours show standing within each piece only, because the two sets of probabilities cannot be ",
-                               "compared directly.")),
+                               "separately. The report ranks only the main network (445 of 517 neighbourhoods). Colours show standing within ",
+                               "each piece only, because the two sets of probabilities cannot be compared directly.")),
                 p(class = "bs-caption", style = "text-align:left; letter-spacing:normal; text-transform:none; margin-top:10px;",
                   span(style = paste0("color:", col_road_primary, "; font-weight:600;"), "\u2014"), " Non-residential roads \u00b7 ",
                   span(style = paste0("color:", col_road_local, "; font-weight:600;"), "\u2014"), " Residential roads \u00b7 ",
@@ -1894,7 +1895,7 @@ ui <- shinydashboard::dashboardPage(
                     "Together they show where an accessibility score rests on measured data, and where it rests on assumed speeds."),
                   div(class = "bs-callout",
                       tags$strong("In Amsterdam: "),
-                      "only 1.6% of road segments (5.2% of arterial roads) carry a sensor."),
+                      "only 1.6% of road segments (5.2% of non-residential roads) carry a sensor."),
                   tags$details(class = "bs-more",
                                tags$summary("More detail"),
                                p("These coverage statistics are the diagnostic step that comes before any accessibility estimate. ",
@@ -2014,7 +2015,7 @@ ui <- shinydashboard::dashboardPage(
                         div(class = "bs-lesson-num", "3"),
                         h2(class = "bs-card-title", "How the network is defined matters more than the speed data."),
                         p(class = "bs-card-subtitle bs-keep",
-                          "Assumed against observed speeds: \u03C1 = 0.92. Without residential streets, the two top-ten lists share no neighbourhoods."),
+                          "Assumed against observed speeds: \u03C1 = 0.92\u20130.95. Without residential streets, the two top-ten lists share no neighbourhoods."),
                         actionLink("cc_goto_real", "See the agreement heatmap \u2192", class = "cta-link"))
                 )
             ),
@@ -2188,14 +2189,23 @@ server <- function(input, output, session) {
   # This table intentionally ignores scenario_rv()/real_scenario() -- both
   # networks are shown at once, since the point is the comparison itself.
   output$real_model_diag_table <- renderDT({
+    fmt_diag <- function(x, kind) {
+      ifelse(kind == "cor", sprintf("%.2f", x),
+             ifelse(kind == "gap", sprintf("%.4f", x),
+                    ifelse(kind == "pr",  sprintf("%.3f", x), format(round(x), big.mark = ","))))
+    }
     df <- real_model_diagnostics %>%
+      mutate(kind = dplyr::case_when(is_correlation ~ "cor",
+                                     grepl("gap", metric, ignore.case = TRUE) ~ "gap",
+                                     grepl("PageRank", metric) ~ "pr",
+                                     TRUE ~ "n")) %>%
       transmute(
         Metric = metric,
-        `Full network` = ifelse(is_correlation, sprintf("%.2f", full), format(full, big.mark = ",")),
-        `No residential roads` = ifelse(is_correlation, sprintf("%.2f", wr), format(wr, big.mark = ",")),
-        Difference = ifelse(is_correlation,
-                            paste0(ifelse(diff >= 0, "+", ""), sprintf("%.2f", diff), " pts"),
-                            paste0(ifelse(diff >= 0, "+", ""), format(round(diff, 4), big.mark = ","))),
+        `Full network` = fmt_diag(full, kind),
+        `No residential roads` = fmt_diag(wr, kind),
+        Difference = ifelse(kind == "cor",
+                            paste0(ifelse(diff >= 0, "+", "\u2212"), sprintf("%.2f", abs(diff)), " pts"),
+                            paste0(ifelse(diff >= 0, "+", "\u2212"), fmt_diag(abs(diff), kind))),
         `Relative change` = ifelse(is_correlation, "\u2014", paste0(ifelse(pct_change >= 0, "+", ""), round(pct_change, 1), "%"))
       )
     # escape = FALSE: the Metric column carries the <i>/<sub> markup from
@@ -2284,7 +2294,7 @@ server <- function(input, output, session) {
     div(class = "bs-callout warm",
         span(class = "amber-dot"),
         tags$strong("A road can be critical to a city without anyone wanting to go there."),
-        " Five neighbourhoods are Amsterdam's busiest bridges, yet being a bridge and being accessible are almost ",
+        " The five neighbourhoods with the highest betweenness are Amsterdam's busiest bridges, yet being a bridge and being accessible are almost ",
         "unrelated (Spearman \u03C1 = ", r$betweenness_accessibility_cor, " across ", r$n_modelled_units,
         " units). Almost.")
   })
