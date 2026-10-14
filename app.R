@@ -708,9 +708,11 @@ ui <- shinydashboard::dashboardPage(
            it) up to a cap that's still generous on very wide/4K displays,
            rather than stopping at a small-laptop width regardless of how
            much screen is actually available. */
-        .bs-shell { max-width: min(94vw, 1800px); margin: 0 auto; padding: 28px 18px 8px; }
+        .bs-shell { max-width: min(97vw, 2600px); margin: 0 auto; padding: 28px 24px 8px; }
         /* ---- step list, gap stats, lessons, details ---- */
-        .bs-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-top: 14px; }
+        .bs-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+        .bs-steps > .bs-roadmap-step:last-child:nth-child(4n+3) { grid-column: span 2; }
+        @media (max-width: 1100px) { .bs-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bs-steps > .bs-roadmap-step:last-child:nth-child(4n+3) { grid-column: auto; } }
         .bs-more { margin-top: 14px; color: var(--bs-soft); font-size: 18px; line-height: 1.65; }
         .bs-more summary { cursor: pointer; color: var(--bs-accent); font-weight: 600; font-size: 18px; }
         .bs-more p { margin: 10px 0 0; }
@@ -764,11 +766,11 @@ ui <- shinydashboard::dashboardPage(
         .tab-content > .tab-pane.active .bs-kpis > :nth-child(4) { animation-delay: .24s; }
         @media (prefers-reduced-motion: reduce) { .bs-card, .bs-kpi, .bs-callout { animation: none !important; } }
         /* ---- University of Pretoria logo (top right of header) ---- */
-        .bs-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+        .bs-header-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
         .bs-header-left { min-width: 0; }
         .bs-up-corner { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; background: var(--bs-card);
                         border: 1px solid var(--bs-border); border-radius: 8px; padding: 12px 18px; }
-        .bs-up-plate { background: #ffffff; border-radius: 6px; display: inline-flex; padding: 6px 10px; }
+        .bs-up-plate { background: #ffffff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; }
         .bs-up-plate img { display: block; height: auto; width: 150px; }
         .bs-up-text { display: flex; flex-direction: column; gap: 2px; }
         .bs-up-dept { font-family: 'Fraunces', Georgia, serif; font-size: 20px; color: var(--bs-ink); line-height: 1.15; padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px solid var(--bs-border); }
@@ -920,7 +922,13 @@ ui <- shinydashboard::dashboardPage(
            sections sit flush with zero gap. margin-top/-bottom collapse
            with neighbouring cards' own margins rather than stacking, so
            this does not create double spacing between two adjacent grids. */
-        .bs-grid-2 { align-items: start; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; margin-bottom: 16px; }
+        .bs-grid-2 { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; margin-bottom: 16px; }
+        .bs-grid-2.bs-stretch { align-items: stretch; }
+        .bs-grid-2.bs-stretch > .bs-card { display: flex; flex-direction: column; }
+        .bs-grid-2.bs-stretch > .bs-card > .bs-more { margin-top: auto; padding-top: 14px; }
+        .bs-col-stack { display: flex; flex-direction: column; gap: 16px; }
+        .bs-col-stack > .bs-card { margin-top: 0 !important; }
+        .bs-col-stack > .bs-card:last-child { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
         .bs-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; margin-bottom: 16px; }
         .bs-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 16px; margin-bottom: 16px; }
 
@@ -1797,13 +1805,13 @@ ui <- shinydashboard::dashboardPage(
                     tags$em("h"), " the bandwidth \u03C3. Bright = close to many sensors; dark = a blind spot.")
               ),
               br(),
-              div(class = "bs-grid-2",
+              div(class = "bs-grid-2 bs-stretch",
                   div(class = "bs-card",
                       p(class = "bs-section-kicker", "Heatmap"),
                       h2(class = "bs-card-title", "Monitoring intensity"),
                       plotlyOutput("kde_map", height = "440px")
                   ),
-                  div(style = "display:flex; flex-direction:column; gap:16px;",
+                  div(class = "bs-col-stack",
                       div(class = "bs-card",
                           p(class = "bs-section-kicker", "Bandwidth"),
                           h2(class = "bs-card-title", "Adjust \u03c3"),
@@ -1837,14 +1845,14 @@ ui <- shinydashboard::dashboardPage(
                     "Compared with a band of random placements. Above the band = clustered; below = more evenly spaced.")
               ),
               br(),
-              div(class = "bs-grid-2",
+              div(class = "bs-grid-2 bs-stretch",
                   div(class = "bs-card",
                       p(class = "bs-section-kicker", "Envelope test"),
                       h2(class = "bs-card-title", "Observed K(r) vs. complete spatial randomness"),
                       plotlyOutput("kfun_plot", height = "380px"),
                       uiOutput("kfun_interpretation")
                   ),
-                  div(style = "display:flex; flex-direction:column; gap:16px;",
+                  div(class = "bs-col-stack",
                       div(class = "bs-card",
                           p(class = "bs-section-kicker", "Settings"),
                           h2(class = "bs-card-title", "Simulation controls"),
@@ -2011,7 +2019,7 @@ ui <- shinydashboard::dashboardPage(
                 )
             ),
             
-            div(class = "bs-grid-2",
+            div(class = "bs-grid-2 bs-stretch",
                 div(class = "bs-card",
                     p(class = "bs-section-kicker", "Limitations"),
                     h2(class = "bs-card-title", "What this cannot say yet"),
