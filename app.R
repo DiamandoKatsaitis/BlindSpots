@@ -636,6 +636,19 @@ would_disconnect_network <- function(candidate_removed_ids) {
 # ============================================================================
 # UI
 # ============================================================================
+# ---- "How to read" slide deck -------------------------------------------
+deck_slide <- function(n, total, chip, title, desc, look, ...) {
+  div(class = "bs-slide",
+      div(class = "bs-slide-num", n),
+      div(class = "bs-slide-meta",
+          span(class = "bs-slide-step", paste0("Step ", n, " of ", total)),
+          span(class = "bs-slide-chip", chip)),
+      h2(class = "bs-slide-title", title),
+      p(class = "bs-slide-desc", desc),
+      p(class = "bs-slide-look", tags$strong("What to look for: "), look),
+      div(class = "bs-slide-ctas", ...))
+}
+
 ui <- shinydashboard::dashboardPage(
   
   # Keep the shinydashboard shell for its tab machinery, but visually replace
@@ -722,8 +735,8 @@ ui <- shinydashboard::dashboardPage(
         .bs-gap-num { font-family: 'Fraunces', Georgia, serif; font-size: 88px; line-height: 1.05; margin: 6px 0 12px; }
         .bs-gap-num.teal { color: var(--bs-accent); }
         .bs-gap-num.warm { color: var(--bs-warm); }
-        .bs-gap-bar { height: 14px; background: #23262c; border-radius: 7px; overflow: hidden; }
-        .bs-gap-fill { height: 100%; width: 0; border-radius: 7px; transition: width 1.6s cubic-bezier(.2,.7,.2,1); }
+        .bs-gap-bar { height: 14px; background: #23262c; border-radius: 3px; overflow: hidden; }
+        .bs-gap-fill { height: 100%; width: 0; border-radius: 3px; transition: width 1.6s cubic-bezier(.2,.7,.2,1); }
         .bs-gap-fill.teal { background: var(--bs-accent); }
         .bs-gap-fill.warm { background: var(--bs-warm); }
         .bs-gap-sub { margin-top: 12px; color: var(--bs-soft); font-size: 19px; line-height: 1.5; }
@@ -732,7 +745,7 @@ ui <- shinydashboard::dashboardPage(
         .bs-list { margin: 8px 0 0; padding-left: 22px; color: var(--bs-soft); font-size: 19px; line-height: 1.6; }
         .bs-list li { margin-bottom: 8px; }
         .bs-list li.main { color: var(--bs-ink); font-weight: 600; }
-        .ring-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bs-warm);
+        .ring-dot { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 2px solid var(--bs-warm);
                     margin-right: 6px; vertical-align: -1px; }
         .bs-fw h3 { font-family: 'Fraunces', Georgia, serif; font-size: 22px; color: var(--bs-accent); margin: 0; padding-top: 14px; }
         .bs-fw .bs-list { font-size: 18px; }
@@ -749,7 +762,7 @@ ui <- shinydashboard::dashboardPage(
         body.bs-presenter .bs-spoken, body.bs-presenter .bs-more,
         body.bs-presenter .bs-card-subtitle:not(.bs-keep) { display: none !important; }
         .bs-read p { margin: 0 0 8px; font-size: 19px; line-height: 1.5; color: var(--bs-soft); }
-        .bs-read-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }
+        .bs-read-dot { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 10px; }
         .bs-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
         .bs-two-col h3 { font-family: 'Fraunces', Georgia, serif; font-size: 24px; color: var(--bs-ink); margin: 0 0 6px; }
         .bs-two-col p { color: var(--bs-soft); font-size: 19px; line-height: 1.6; margin: 0; }
@@ -808,14 +821,19 @@ ui <- shinydashboard::dashboardPage(
         .bs-nav-link.active { color: var(--bs-bg) !important; background: var(--bs-accent);
                                box-shadow: 0 0 14px rgba(52,211,153,0.35); }
 
+        /* ---- in-section row (Overview + Accessibility share one tab) ---- */
+        .bs-subnav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+        .bs-subnav-label { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+                           color: var(--bs-faint); margin-right: 6px; }
+
         /* ---- signature dots ---- */
-        .pulse-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+        .pulse-dot { display:inline-block; width:9px; height:9px; border-radius:2px;
                      background: var(--bs-accent); margin-right:6px; animation: pulseglow 2.2s infinite; }
-        .blindspot-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+        .blindspot-dot { display:inline-block; width:9px; height:9px; border-radius:2px;
                           background: var(--bs-void); border:1.5px dashed #8b97a3; margin-right:6px; }
-        .amber-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+        .amber-dot { display:inline-block; width:9px; height:9px; border-radius:2px;
                      background: var(--bs-warm); margin-right:6px; animation: pulseglow-amber 2.2s infinite; }
-        .removed-dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+        .removed-dot { display:inline-block; width:9px; height:9px; border-radius:2px;
                         background: #e0575c; margin-right:6px; animation: pulseglow-red 2.2s infinite; }
         @keyframes pulseglow { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.55);} 70%{box-shadow:0 0 0 9px rgba(52,211,153,0);} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0);} }
         @keyframes pulseglow-red { 0%{box-shadow:0 0 0 0 rgba(224,87,92,.55);} 70%{box-shadow:0 0 0 9px rgba(224,87,92,0);} 100%{box-shadow:0 0 0 0 rgba(224,87,92,0);} }
@@ -883,7 +901,7 @@ ui <- shinydashboard::dashboardPage(
           background: var(--bs-card); border: 1px solid var(--bs-border); border-radius: 8px;
           padding: 18px; height: 100%;
         }
-        .bs-step-circle { width: 36px; height: 36px; border-radius: 50%; background: var(--bs-bg);
+        .bs-step-circle { width: 36px; height: 36px; border-radius: 6px; background: var(--bs-bg);
                            border: 2px solid var(--bs-accent); color: var(--bs-accent);
                            display: flex; align-items: center; justify-content: center;
                            font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 21px; margin-bottom: 12px; }
@@ -894,7 +912,7 @@ ui <- shinydashboard::dashboardPage(
         /* Icon badges (Overview roadmap + methodology tiles) -- Font Awesome
            glyphs in a tinted circle, cycling through the same four accent
            colours the KPI tiles already use, instead of plain emoji. */
-        .bs-icon-badge { width: 36px; height: 36px; border-radius: 50%; margin-bottom: 10px;
+        .bs-icon-badge { width: 36px; height: 36px; border-radius: 6px; margin-bottom: 10px;
                           display: flex; align-items: center; justify-content: center;
                           font-size: 21px; background: rgba(52,211,153,0.13); color: var(--bs-accent); }
         .bs-icon-badge.teal { background: rgba(47,184,166,0.14); color: var(--bs-teal); }
@@ -959,7 +977,7 @@ ui <- shinydashboard::dashboardPage(
         .bs-control label { color: var(--bs-faint); font-size: 17px; text-transform: uppercase; letter-spacing: .08em; }
 
         /* ---- badges (Station Square scenario indicator) ---- */
-        .bs-badge { padding: 0.15rem 0.7rem; border-radius: 12px; font-size: 1.22rem; font-weight: 600; }
+        .bs-badge { padding: 0.15rem 0.7rem; border-radius: 6px; font-size: 1.22rem; font-weight: 600; }
 
         /* ---- tables / DT ---- */
         /* DataTables ships its own ~13px default, unrelated to the rest of
@@ -998,19 +1016,73 @@ ui <- shinydashboard::dashboardPage(
                         border-radius: 6px; margin-bottom: 12px; overflow-x: auto; color: var(--bs-ink);
                         font-size: 23px; }
         .bs-equation .MathJax { color: var(--bs-ink) !important; }
+        .bs-equation { display: flex; justify-content: center; text-align: center; }
+        .bs-equation .help-block { margin: 0 !important; width: 100%; text-align: center !important; }
+        .bs-equation .MathJax_Display, .bs-equation mjx-container { margin: 0 auto !important; text-align: center !important; width: 100% !important; }
+        .bs-equation .MathJax_Display > .MathJax { position: static !important; margin: 0 auto !important; }
 
         /* ---- theory panel: Markov / baseline toggle ---- */
-        .bs-theory-tabs { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+        .bs-theory-tabs { display: flex; gap: 10px; margin: 20px 0 22px; flex-wrap: wrap; }
         .bs-theory-tab {
           font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600;
           letter-spacing: .04em; text-transform: uppercase; color: var(--bs-faint);
-          background: var(--bs-bg); border: 1px solid var(--bs-border); border-radius: 20px;
-          padding: 8px 18px; cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+          background: var(--bs-bg); border: 1px solid var(--bs-border); border-radius: 6px;
+          padding: 9px 16px; cursor: pointer; transition: color .15s, border-color .15s, background .15s;
         }
         .bs-theory-tab:hover { color: var(--bs-ink); }
         .bs-theory-tab-active {
           color: var(--bs-bg) !important; background: var(--bs-accent) !important;
           border-color: var(--bs-accent) !important;
+        }
+
+        /* ---- How-to-read slide deck ---- */
+        .bs-deck { margin-top: 18px; }
+        .bs-deck-track { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth;
+                         scrollbar-width: none; -ms-overflow-style: none; }
+        .bs-deck-track::-webkit-scrollbar { display: none; }
+        .bs-slide { flex: 0 0 100%; scroll-snap-align: start; box-sizing: border-box; position: relative; overflow: hidden;
+                    min-height: min(54vh, 470px); padding: 44px 60px; display: flex; flex-direction: column; justify-content: center; gap: 14px;
+                    background: var(--bs-bg); border: 1px solid var(--bs-border); border-radius: 8px; }
+        .bs-slide-num { position: absolute; right: 48px; top: 6px; font-family: 'Fraunces', Georgia, serif; font-size: 230px; line-height: 1;
+                        color: var(--bs-accent); opacity: .12; pointer-events: none; }
+        .bs-slide-meta { display: flex; align-items: center; gap: 14px; }
+        .bs-slide-step { font-size: 15px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--bs-faint); }
+        .bs-slide-chip { font-size: 14px; font-weight: 600; letter-spacing: .06em; padding: 4px 12px; border-radius: 4px;
+                         border: 1px solid var(--bs-border); color: var(--bs-soft); background: var(--bs-card); }
+        .bs-slide-title { font-family: 'Fraunces', Georgia, serif; font-size: 50px; line-height: 1.12; margin: 4px 0 0; color: var(--bs-ink); max-width: 1150px; }
+        .bs-slide-desc { font-size: 25px; line-height: 1.55; color: var(--bs-soft); margin: 0; max-width: 860px; }
+        .bs-slide-look { font-size: 19px; line-height: 1.5; color: var(--bs-faint); margin: 0; max-width: 860px; }
+        .bs-slide-look strong { color: var(--bs-warm); font-weight: 600; }
+        .bs-slide-ctas { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 10px; }
+        a.bs-slide-cta { font-size: 23px !important; font-weight: 600; }
+        .bs-deck-controls { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 16px; }
+        .bs-deck-arrow { width: 46px; height: 40px; border-radius: 6px; border: 1px solid var(--bs-border); background: var(--bs-bg);
+                         color: var(--bs-soft); font-size: 20px; cursor: pointer; transition: all .15s ease; }
+        .bs-deck-arrow:hover:not(:disabled) { background: var(--bs-accent); color: var(--bs-bg); border-color: var(--bs-accent); }
+        .bs-deck-arrow:disabled { opacity: .35; cursor: default; }
+        .bs-deck-dots { display: flex; gap: 10px; }
+        .bs-deck-dot { width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--bs-faint); background: transparent;
+                       padding: 0; cursor: pointer; transition: all .2s ease; }
+        .bs-deck-dot.active { background: var(--bs-accent); border-color: var(--bs-accent); width: 30px; border-radius: 2px; }
+        .bs-deck-count { font-size: 16px; color: var(--bs-faint); letter-spacing: .1em; min-width: 54px; text-align: center; }
+        @media (max-width: 900px) { .bs-slide { padding: 30px 26px; } .bs-slide-title { font-size: 36px; } .bs-slide-num { font-size: 150px; right: 18px; } }
+
+        /* ---- one shared look for every in-page switcher (square-cornered) ---- */
+        .bs-pills { display: flex; justify-content: flex-start; width: 100%; margin: 20px 0 22px; }
+        .bs-switch-row .bs-pills { margin: 0; width: auto; }
+        .bs-pills .form-group, .bs-pills .shiny-input-radiogroup { margin: 0 !important; width: auto; }
+        .bs-pills .shiny-options-group { background: none !important; border: none !important; padding: 0 !important; gap: 10px !important; justify-content: flex-start !important; }
+        .bs-pills > label.control-label, .bs-pills .control-label:empty { display: none !important; }
+        .bs-pills .shiny-options-group label, .bs-subnav a, .bs-theory-tab {
+          display: inline-flex; align-items: center; padding: 9px 18px !important; border-radius: 6px !important;
+          border: 1px solid var(--bs-border); background: var(--bs-bg); color: var(--bs-faint) !important;
+          font-family: 'Space Grotesk', sans-serif; font-size: 16px !important; font-weight: 600; letter-spacing: .04em;
+          text-transform: uppercase; cursor: pointer; text-decoration: none !important; white-space: nowrap; transition: all .15s ease;
+        }
+        .bs-pills .shiny-options-group label:hover, .bs-subnav a:hover, .bs-theory-tab:hover { color: var(--bs-ink) !important; background: var(--bs-bg); }
+        .bs-pills .shiny-options-group label:has(input:checked), .bs-subnav a.active, .bs-theory-tab-active {
+          color: var(--bs-bg) !important; background: var(--bs-accent) !important; border-color: var(--bs-accent) !important;
+          box-shadow: 0 0 12px rgba(52,211,153,0.3);
         }
 
         /* ---- big reveal number (e.g. top-10 overlap stat) ---- */
@@ -1082,7 +1154,7 @@ ui <- shinydashboard::dashboardPage(
               tabName = tabName || 'home';
             }
             $('.bs-nav-link').removeClass('active');
-            $('.bs-nav-link[data-tab=\"' + tabName + '\"]').addClass('active');
+            $('.bs-nav-link[data-tab=\"' + (tabName === 'access' ? 'home' : tabName) + '\"]').addClass('active');
           }
           function getLeafletMap(id){
             try {
@@ -1146,6 +1218,7 @@ ui <- shinydashboard::dashboardPage(
           // Belt-and-braces fallback (essentially never needed in 2026, but
           // costs nothing to keep alongside the ResizeObserver above).
           $(document).on('shown.bs.tab', function(){ setTimeout(fixRealMapSizes, 300); });
+          $(document).on('shown.bs.tab', function(){ bsRetypeset(); });
           $(window).on('resize', fixRealMapSizes);
         });
       ")),
@@ -1254,6 +1327,24 @@ ui <- shinydashboard::dashboardPage(
           if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey &&
               !/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || ''))) bsTogglePresenter();
         });
+        function bsDeckIdx(){ var t=document.getElementById('bs-deck-track'); if(!t) return 0;
+          return Math.max(0, Math.min(t.children.length-1, Math.round(t.scrollLeft / (t.clientWidth + 16)))); }
+        function bsDeckSync(){
+          var t=document.getElementById('bs-deck-track'); if(!t) return; var i=bsDeckIdx(), n=t.children.length;
+          document.querySelectorAll('.bs-deck-dot').forEach(function(d,k){ d.classList.toggle('active', k===i); });
+          var c=document.getElementById('bs-deck-count'); if(c) c.textContent=(i+1)+' / '+n;
+          var p=document.getElementById('bs-deck-prev'), x=document.getElementById('bs-deck-next');
+          if(p) p.disabled = (i===0); if(x) x.disabled = (i===n-1);
+        }
+        function bsDeckTo(i){ var t=document.getElementById('bs-deck-track'); if(t) t.scrollTo({left:i*(t.clientWidth+16),behavior:'smooth'}); }
+        function bsDeckGo(d){ bsDeckTo(Math.max(0, Math.min(document.getElementById('bs-deck-track').children.length-1, bsDeckIdx()+d))); }
+        document.addEventListener('keydown', function(e){
+          var pane=document.getElementById('shiny-tab-start');
+          if(!pane || !pane.classList.contains('active')) return;
+          if(/INPUT|TEXTAREA|SELECT/.test((e.target.tagName||''))) return;
+          if(e.key==='ArrowRight') bsDeckGo(1); else if(e.key==='ArrowLeft') bsDeckGo(-1);
+        });
+        $(function(){ bsDeckSync(); });
         function bsRunAnimations(){
           var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           document.querySelectorAll('[data-count]').forEach(function(el){
@@ -1292,6 +1383,12 @@ ui <- shinydashboard::dashboardPage(
           baselineBody.style.display = showMarkov ? 'none' : 'block';
           if (markovTab) markovTab.classList.toggle('bs-theory-tab-active', showMarkov);
           if (baselineTab) baselineTab.classList.toggle('bs-theory-tab-active', !showMarkov);
+          bsRetypeset();
+        }
+        function bsRetypeset(){
+          setTimeout(function(){
+            try { if (window.MathJax && MathJax.Hub && MathJax.Hub.Queue) MathJax.Hub.Queue(['Rerender', MathJax.Hub]); } catch(e) {}
+          }, 60);
         }
       "))
     ),
@@ -1336,9 +1433,6 @@ ui <- shinydashboard::dashboardPage(
                  tags$a(class = "bs-nav-link active", href = "#", `data-tab` = "home",
                         onclick = "Shiny.setInputValue('bs_nav', 'home', {priority: 'event'}); return false;",
                         icon("house"), "Overview"),
-                 tags$a(class = "bs-nav-link", href = "#", `data-tab` = "access",
-                        onclick = "Shiny.setInputValue('bs_nav', 'access', {priority: 'event'}); return false;",
-                        icon("route"), "Accessibility"),
                  tags$a(class = "bs-nav-link", href = "#", `data-tab` = "methods",
                         onclick = "Shiny.setInputValue('bs_nav', 'methods', {priority: 'event'}); return false;",
                         icon("flask"), "See The Methods"),
@@ -1370,46 +1464,49 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-section-kicker", "Start here"),
                 h2(class = "bs-card-title", "How to read this app"),
                 p(class = "bs-card-subtitle",
-                  "Seven short stops, best read left to right. Real Findings and Station Square use the real ",
-                  "Amsterdam data. See The Methods and Anomaly use a small made-up network, so you can play ",
+                  "Six short stops, best read in order. Real Findings and Station Square use the real Amsterdam data; ",
+                  "See The Methods and Anomaly use a small made-up network, so you can play ",
                   "with the ideas without touching the real results."),
-                div(class = "bs-steps",
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "1"),
-                        h2(class = "bs-card-title", "Overview"),
-                        p(class = "bs-card-subtitle", "The question: do the sensors cover the whole network?"),
-                        actionLink("goto_home", "Go to Overview \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "2"),
-                        h2(class = "bs-card-title", "Accessibility"),
-                        p(class = "bs-card-subtitle", "The two models used throughout: a simple baseline and a Markov chain."),
-                        actionLink("goto_access", "See the models \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "3"),
-                        h2(class = "bs-card-title", "See The Methods"),
-                        p(class = "bs-card-subtitle", "Kernel density and the K-function, explained on a toy network."),
-                        actionLink("goto_methods", "Play with the demo \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "4"),
-                        h2(class = "bs-card-title", "Real Findings"),
-                        p(class = "bs-card-subtitle", "The Amsterdam results, with and without residential streets."),
-                        actionLink("goto_real", "See the real numbers \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "5"),
-                        h2(class = "bs-card-title", "Station Square"),
-                        p(class = "bs-card-subtitle", "The one neighbourhood that is both a major bridge and highly accessible."),
-                        actionLink("goto_station", "Meet the exception \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "6"),
-                        h2(class = "bs-card-title", "Anomaly"),
-                        p(class = "bs-card-subtitle", "Close a road on the toy network and watch both models react."),
-                        actionLink("goto_anomaly", "Break something \u2192", class = "cta-link")),
-                    div(class = "bs-roadmap-step",
-                        div(class = "bs-step-circle", "7"),
-                        h2(class = "bs-card-title", "Conclusion"),
-                        p(class = "bs-card-subtitle", "Three lessons, the limitations, and future work."),
-                        actionLink("goto_conclusion", "Wrap up \u2192", class = "cta-link"))
-                )
+                div(class = "bs-deck",
+                    div(id = "bs-deck-track", class = "bs-deck-track", onscroll = "bsDeckSync()",
+                        deck_slide(1, 6, "Real Amsterdam data", "The question, and how accessibility is scored",
+                                   "94.2% of sensors work, but they sit on only 1.6% of roads. Then accessibility is scored two ways: a simple baseline and a Markov chain.",
+                                   "The numbers counting up, then a driver hopping between neighbourhoods.",
+                                   actionLink("goto_home", "Go to Overview \u2192", class = "cta-link bs-slide-cta"),
+                                   actionLink("goto_access", "See the models \u2192", class = "cta-link bs-slide-cta")),
+                        deck_slide(2, 6, "Toy network", "How the statistics work",
+                                   "Network kernel density and the K-function, explained on a small made-up network.",
+                                   "Drag the bandwidth slider, and see when the line leaves the grey band.",
+                                   actionLink("goto_methods", "Play with the demo \u2192", class = "cta-link bs-slide-cta")),
+                        deck_slide(3, 6, "Real Amsterdam data", "The Amsterdam results",
+                                   "Everything run twice: with and without residential streets.",
+                                   "Flip between the two networks and compare the top-ten lists.",
+                                   actionLink("goto_real", "See the real numbers \u2192", class = "cta-link bs-slide-cta")),
+                        deck_slide(4, 6, "Real Amsterdam data", "The one exception",
+                                   "The neighbourhood that is both a major bridge and highly accessible.",
+                                   "The amber bar: Stationsplein e.o. stands out on both measures.",
+                                   actionLink("goto_station", "Meet the exception \u2192", class = "cta-link bs-slide-cta")),
+                        deck_slide(5, 6, "Toy network", "What if a road closes?",
+                                   "Close a road on the toy network and watch both models react.",
+                                   "Try a small local street first, then the highway.",
+                                   actionLink("goto_anomaly", "Break something \u2192", class = "cta-link bs-slide-cta")),
+                        deck_slide(6, 6, "Summary", "To sum up",
+                                   "Three lessons, the limitations, and future work.",
+                                   "Open \u201cMore limitations\u201d and \u201cFull list\u201d for the detail.",
+                                   actionLink("goto_conclusion", "Wrap up \u2192", class = "cta-link bs-slide-cta"))),
+                    div(class = "bs-deck-controls",
+                        tags$button(id = "bs-deck-prev", type = "button", class = "bs-deck-arrow", onclick = "bsDeckGo(-1)",
+                                    `aria-label` = "Previous step", HTML("&#8592;")),
+                        div(class = "bs-deck-dots",
+                            tags$button(type = "button", class = "bs-deck-dot active", `aria-label` = "Go to step 1", onclick = "bsDeckTo(0)"),
+                            tags$button(type = "button", class = "bs-deck-dot", `aria-label` = "Go to step 2", onclick = "bsDeckTo(1)"),
+                            tags$button(type = "button", class = "bs-deck-dot", `aria-label` = "Go to step 3", onclick = "bsDeckTo(2)"),
+                            tags$button(type = "button", class = "bs-deck-dot", `aria-label` = "Go to step 4", onclick = "bsDeckTo(3)"),
+                            tags$button(type = "button", class = "bs-deck-dot", `aria-label` = "Go to step 5", onclick = "bsDeckTo(4)"),
+                            tags$button(type = "button", class = "bs-deck-dot", `aria-label` = "Go to step 6", onclick = "bsDeckTo(5)")),
+                        span(id = "bs-deck-count", class = "bs-deck-count", "1 / 6"),
+                        tags$button(id = "bs-deck-next", type = "button", class = "bs-deck-arrow", onclick = "bsDeckGo(1)",
+                                    `aria-label` = "Next step", HTML("&#8594;"))))
             ),
             
             div(class = "bs-card",
@@ -1442,6 +1539,10 @@ ui <- shinydashboard::dashboardPage(
           shinydashboard::tabItem(
             tabName = "home",
             
+            div(class = "bs-subnav",
+                span(class = "bs-subnav-label", "In this section"),
+                tags$a(href = "#", class = "active", onclick = "Shiny.setInputValue('bs_nav', 'home', {priority: 'event'}); return false;", "The question"),
+                tags$a(href = "#", class = "", onclick = "Shiny.setInputValue('bs_nav', 'access', {priority: 'event'}); return false;", "Accessibility")),
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "The question"),
                 h2(class = "bs-card-title", style = "font-size: 38px;",
@@ -1504,6 +1605,10 @@ ui <- shinydashboard::dashboardPage(
           shinydashboard::tabItem(
             tabName = "access",
             
+            div(class = "bs-subnav",
+                span(class = "bs-subnav-label", "In this section"),
+                tags$a(href = "#", class = "", onclick = "Shiny.setInputValue('bs_nav', 'home', {priority: 'event'}); return false;", "The question"),
+                tags$a(href = "#", class = "active", onclick = "Shiny.setInputValue('bs_nav', 'access', {priority: 'event'}); return false;", "Accessibility")),
             div(class = "bs-card",
                 p(class = "bs-section-kicker", "Before the findings"),
                 h2(class = "bs-card-title", "What is accessibility?"),
@@ -1734,8 +1839,7 @@ ui <- shinydashboard::dashboardPage(
                 p(class = "bs-section-kicker", "Case study"),
                 h2(class = "bs-card-title", "The Station Square exception"),
                 uiOutput("station_intro_callout"),
-                br(),
-                div(style = "display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap;",
+                div(class = "bs-switch-row", style = "margin-top:16px;",
                     tags$span(style = "font-size:1.24rem; color:var(--bs-faint);", "Viewing:"),
                     div(class = "bs-pills",
                         radioButtons("scenario_station", NULL, inline = TRUE,
